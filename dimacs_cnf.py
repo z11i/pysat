@@ -62,7 +62,7 @@ class Literal:
         self._assignment = val
 
     def __str__(self):
-        return '{}{}'.format('-' if self._negation else '', self._name)
+        return 'C({}{})'.format('-' if self._negation else '', self._name)
 
     def __repr__(self):
         return self.__str__()
@@ -92,3 +92,31 @@ class Clause:
             self._literals[idx] = item
         else:
             self._literals[idx] = Literal(item)
+
+
+class Reader:
+    """ Read a .cnf file and return a list of Clauses """
+    @staticmethod
+    def read(fname):
+        """ Reads fname and returns list of Clauses """
+        with open(fname) as f:
+            lines = [x.strip() for x in f.readlines()]
+
+        literals = dict()
+        clauses = []
+
+        for line in lines:
+            if line.startswith('c ') or line.startswith('p '):
+                # comments skipped. number of literals/clauses do not
+                # need to be read as we are using lists
+                continue
+            else:
+                numbers = [int(x) for x in line.split(' ')][:-1]
+                clause = []
+                for number in numbers:
+                    if number not in literals:
+                        literals[number] = Literal(number)
+                    clause.append(literals[number])
+                clauses.append(clause)
+
+        return clauses
