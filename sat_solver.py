@@ -2,10 +2,16 @@
 SAT solver using CDCL
 """
 
+import argparse
+import logging
 import sys
+
 
 class FileFomratError(Exception):
     """ Raised when file format is not in DIMACS CNF format """
+    pass
+
+def unit_propagate(clauses, assignment):
     pass
 
 def read_file(fname):
@@ -38,12 +44,38 @@ def read_file(fname):
 
     if len(lits) != count_literals or len(clss) != count_clauses:
         raise FileFomratError('Unmatched literal count or clause count.')
+
+    logger.debug('clauses: %s', clauses)
+    logger.debug('literals: %s', literals)
+
     return clss, lits
 
-if __name__ == '__main__':
-    try:
-        filename = sys.argv[1]
-    except IndexError:
-        filename = 'test/sample.cnf'
+def set_logger(level):
+    """ Sets the module logger """
+    l = logging.getLogger(__name__)
+    l.setLevel(level)
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('[%(funcName)s][%(levelname)s]: %(message)s')
+    handler.setFormatter(formatter)
+    l.addHandler(handler)
+    return l
 
-    clauses, literals = read_file(filename)
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(
+        description='Reads a file and try to determine satisfiability by CDCL.'
+    )
+    parser.add_argument(
+        'filepath',
+        type=str,
+        default='test/sample.cnf',
+        nargs='?',
+        help='path of .cnf file')
+    parser.add_argument(
+        '--loglevel',
+        default='WARNING',
+        nargs='?',
+        help='level of logging (WARNING, DEBUG, etc.)')
+    args = parser.parse_args()
+    logger = set_logger(getattr(logging, args.loglevel))
+
+    clauses, literals = read_file(args.filepath)
