@@ -87,29 +87,20 @@ class Solver:
             :param assignment: a dictionary mapping int -> 0 | 1
             :returns: (is_clause_a_unit, the_literal)
         """
-
-        unassigned = None
-        value_0_count = 0
-        logger.finer('clause: %s', clause)
         logger.finer('assignment: %s', assignment)
 
-        for literal in clause:
-            logger.finer('literal: %s', literal)
-            variable = abs(literal)
-            if variable not in assignment:
-                if unassigned is not None:
-                    logger.finer('multiple unassigned literals')
-                    return False, None
-                logger.finer('setting unassigned to %s', variable)
-                unassigned = variable
-            elif Solver.compute_value(literal, assignment) == 0:
-                value_0_count += 1
-                logger.finer('adding value_0_count to %s', value_0_count)
-        return value_0_count == len(clause) - 1, unassigned
+        values = []
+        unassigned = None
 
-        # return (len(clause) - 1 == len([
-        #     x for x in clause if x in assignment and assignment[x] == 0
-        # ])) and (len([x for x in clause if x not in assignment]) == 1)
+        for literal in clause:
+            value = Solver.compute_value(literal, assignment)
+            values.append(value)
+            unassigned = literal if value == UNASSIGN else None
+
+        check = (values.count(FALSE) == len(clause) - 1 and
+                 values.count(UNASSIGN) == 1)
+        logger.fine('%s: %s', clause, (check, unassigned))
+        return check, unassigned
 
     @staticmethod
     def unit_propagate(clauses, assignment):
