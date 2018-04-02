@@ -50,8 +50,8 @@ class Solver:
         if len(literals) != count_literals or len(clauses) != count_clauses:
             raise FileFomratError('Unmatched literal count or clause count.')
 
-        logger.debug('clauses: %s', clauses)
-        logger.debug('literals: %s', literals)
+        logger.fine('clauses: %s', clauses)
+        logger.fine('literals: %s', literals)
 
         return clauses, literals
 
@@ -64,17 +64,17 @@ class Solver:
             :param assignment: a dictionary mapping int -> 0 | 1
             :returns: value of the literal
         """
-        logger.debug('literal: %s', literal)
-        logger.debug('assignment: %s', assignment)
+        logger.finest('literal: %s', literal)
+        logger.finest('assignment: %s', assignment)
         if literal == 0:
             raise ValueError('0 is an invalid literal!')
 
         variable = abs(literal)
         if variable not in assignment:
-            logger.debug('%s not in assignment', variable)
+            logger.finest('%s not in assignment', variable)
             return UNASSIGN
         value = assignment[variable] ^ (literal < 0)
-        logger.debug('value: %s', value)
+        logger.finest('value: %s', value)
         return value
 
     @staticmethod
@@ -90,21 +90,21 @@ class Solver:
 
         unassigned = None
         value_0_count = 0
-        logger.debug('clause: %s', clause)
-        logger.debug('assignment: %s', assignment)
+        logger.finer('clause: %s', clause)
+        logger.finer('assignment: %s', assignment)
 
         for literal in clause:
-            logger.debug('literal: %s', literal)
+            logger.finer('literal: %s', literal)
             variable = abs(literal)
             if variable not in assignment:
                 if unassigned is not None:
-                    logger.debug('multiple unassigned literals')
+                    logger.finer('multiple unassigned literals')
                     return False, None
-                logger.debug('setting unassigned to %s', variable)
+                logger.finer('setting unassigned to %s', variable)
                 unassigned = variable
             elif Solver.compute_value(literal, assignment) == 0:
                 value_0_count += 1
-                logger.debug('adding value_0_count to %s', value_0_count)
+                logger.finer('adding value_0_count to %s', value_0_count)
         return value_0_count == len(clause) - 1, unassigned
 
         # return (len(clause) - 1 == len([

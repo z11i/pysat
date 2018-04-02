@@ -1,6 +1,34 @@
 import logging
 import sys
 
+logging.FINE = 7
+logging.FINER = 5
+logging.FINEST = 1
+
+logging.addLevelName(logging.FINE, 'FINE')
+logging.addLevelName(logging.FINER, 'FINER')
+logging.addLevelName(logging.FINEST, 'FINEST')
+
+
+def fine(self, message, *args, **kws):
+    if self.isEnabledFor(logging.FINE):
+        self._log(logging.FINE, message, args, **kws)
+
+
+def finer(self, message, *args, **kws):
+    if self.isEnabledFor(logging.FINER):
+        self._log(logging.FINER, message, args, **kws)
+
+
+def finest(self, message, *args, **kws):
+    if self.isEnabledFor(logging.FINEST):
+        self._log(logging.FINEST, message, args, **kws)
+
+
+logging.Logger.fine = fine
+logging.Logger.finer = finer
+logging.Logger.finest = finest
+
 
 def set_logger(level='DEBUG'):
     """
