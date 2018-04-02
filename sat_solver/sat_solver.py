@@ -13,7 +13,7 @@ class Solver:
     def __init__(self, filename=DEFAULT_FILE):
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
-        self.assignments = {}
+        self.assignments = dict.fromkeys(list(self.vars), UNASSIGN)
 
     def solve(self):
         pass
