@@ -20,3 +20,5 @@ assert not s.is_unit_clause(frozenset([1, 2]), assign)[0]
 assert s.is_unit_clause(frozenset([-1, 3]), assign)[0]
 assert not s.is_unit_clause(frozenset([-1, 2]), assign)[0]
 assert not s.is_unit_clause(frozenset([-2, 3]), assign)[0]
+
+print(s.compute_cnf())

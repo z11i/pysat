@@ -12,7 +12,8 @@ class Solver:
 
     def __init__(self, filename=DEFAULT_FILE):
         self.filename = filename
-        self.clauses = Solver.read_file(filename)
+        self.cnf, self.vars = Solver.read_file(filename)
+        self.assignments = {}
 
     def solve(self):
         pass
@@ -76,6 +77,17 @@ class Solver:
         value = assignment[variable] ^ (literal < 0)
         logger.finest('value: %s', value)
         return value
+
+    @staticmethod
+    def compute_clause(clause, assignment):
+        logger.finer('clause: %s', clause)
+        logger.finer('assignment: %s', assignment)
+        return max([Solver.compute_value(literal, assignment) for literal in clause])
+
+    def compute_cnf(self):
+        logger.debug('cnf: %s', self.cnf)
+        logger.debug('assignments: %s', self.assignments)
+        return min([Solver.compute_clause(clause, self.assignments) for clause in self.cnf])
 
     @staticmethod
     def is_unit_clause(clause, assignment):
