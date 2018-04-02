@@ -56,22 +56,24 @@ class Solver:
         return clauses, literals
 
     @staticmethod
-    def compute_value(variable, assignment):
+    def compute_value(literal, assignment):
         """
-        Compute the value of the variable (could be -/ve or +/ve) from
+        Compute the value of the literal (could be -/ve or +/ve) from
         `assignment`. Returns -1 if unassigned
-            :param variable: an int, can't be 0
+            :param literal: an int, can't be 0
             :param assignment: a dictionary mapping int -> 0 | 1
             :returns: value of the literal
         """
-        logger.debug('literal: %s', variable)
+        logger.debug('literal: %s', literal)
         logger.debug('assignment: %s', assignment)
-        if variable == 0:
+        if literal == 0:
             raise ValueError('0 is an invalid literal!')
-        if abs(variable) not in assignment:
-            logger.debug('%s not in assignment', abs(variable))
+
+        variable = abs(literal)
+        if variable not in assignment:
+            logger.debug('%s not in assignment', variable)
             return UNASSIGN
-        value = assignment[abs(variable)] ^ (variable < 0)
+        value = assignment[variable] ^ (literal < 0)
         logger.debug('value: %s', value)
         return value
 
@@ -79,7 +81,7 @@ class Solver:
     def is_unit_clause(clause, assignment):
         """
         Checks if clause is a unit clause. If and only if there is
-        exactly 1 literal unassigned, and all the other literals have
+        exactly 1 literal unassigned, and all the other literals having
         value of 0.
             :param clause: set of ints
             :param assignment: a dictionary mapping int -> 0 | 1
@@ -93,19 +95,17 @@ class Solver:
 
         for literal in clause:
             logger.debug('literal: %s', literal)
-            abs_v = abs(literal)
-            if abs_v not in assignment:
+            variable = abs(literal)
+            if variable not in assignment:
                 if unassigned is not None:
                     logger.debug('multiple unassigned literals')
-                    return (False, None)
-                logger.debug('setting unassigned to %s', abs_v)
-                unassigned = abs_v
+                    return False, None
+                logger.debug('setting unassigned to %s', variable)
+                unassigned = variable
             elif Solver.compute_value(literal, assignment) == 0:
                 value_0_count += 1
                 logger.debug('adding value_0_count to %s', value_0_count)
-        if value_0_count == len(clause) - 1:
-            return True, unassigned
-        return False, None
+        return value_0_count == len(clause) - 1, unassigned
 
         # return (len(clause) - 1 == len([
         #     x for x in clause if x in assignment and assignment[x] == 0
