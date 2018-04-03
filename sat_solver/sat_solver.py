@@ -56,56 +56,48 @@ class Solver:
 
         return clauses, literals
 
-    @staticmethod
-    def compute_value(literal, assignment):
+    def compute_value(self, literal):
         """
         Compute the value of the literal (could be -/ve or +/ve) from
         `assignment`. Returns -1 if unassigned
             :param literal: an int, can't be 0
-            :param assignment: a dictionary mapping int -> 0 | 1
             :returns: value of the literal
         """
         logger.finest('literal: %s', literal)
-        logger.finest('assignment: %s', assignment)
         if literal == 0:
             raise ValueError('0 is an invalid literal!')
 
         variable = abs(literal)
-        if variable not in assignment:
+        if variable not in self.assignments:
             logger.finest('%s not in assignment', variable)
             return UNASSIGN
-        value = assignment[variable] ^ (literal < 0)
+        value = self.assignments[variable] ^ (literal < 0)
         logger.finest('value: %s', value)
         return value
 
-    @staticmethod
-    def compute_clause(clause, assignment):
+    def compute_clause(self, clause):
         logger.finer('clause: %s', clause)
-        logger.finer('assignment: %s', assignment)
-        return max([Solver.compute_value(literal, assignment) for literal in clause])
+        return max(map(self.compute_value, clause))
 
     def compute_cnf(self):
         logger.debug('cnf: %s', self.cnf)
         logger.debug('assignments: %s', self.assignments)
-        return min([Solver.compute_clause(clause, self.assignments) for clause in self.cnf])
+        return min(map(self.compute_clause, self.cnf))
 
-    @staticmethod
-    def is_unit_clause(clause, assignment):
+    def is_unit_clause(self, clause):
         """
         Checks if clause is a unit clause. If and only if there is
         exactly 1 literal unassigned, and all the other literals having
         value of 0.
             :param clause: set of ints
-            :param assignment: a dictionary mapping int -> 0 | 1
             :returns: (is_clause_a_unit, the_literal)
         """
-        logger.finer('assignment: %s', assignment)
 
         values = []
         unassigned = None
 
         for literal in clause:
-            value = Solver.compute_value(literal, assignment)
+            value = self.compute_value(literal)
             values.append(value)
             unassigned = literal if value == UNASSIGN else None
 
@@ -114,19 +106,12 @@ class Solver:
         logger.fine('%s: %s', clause, (check, unassigned))
         return check, unassigned
 
-    @staticmethod
-    def unit_propagate(clauses, assignment):
+    def unit_propagate(self):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
         process of iteratively applying the unit clause rule.
-            :param clauses: set of sets of int
-            :param assignment: a dictionary mapping int -> 0 | 1
-            :returns: the resultant assignment
         """
-        # for clause in clauses:
-        # flag, literal = is_unit_clause(clause, assignment)
-        # if flag:
-        # assignment[literal] = 1
-
-        pass
+        checks = list(map(self.is_unit_clause, self.cnf))
+        for x in [lit for yes, lit in checks if yes]:
+            print(x)
