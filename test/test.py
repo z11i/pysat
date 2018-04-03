@@ -8,9 +8,8 @@ assign = {
     2: 0
 }
 sat_solver.logger.setLevel('FINE')
-"""
 s = sat_solver.Solver()
-s.assignments = assign
+s.assigns = assign
 assert s.compute_value(-1) == 0
 assert s.compute_value(1) == 1
 assert s.compute_value(2) == 0

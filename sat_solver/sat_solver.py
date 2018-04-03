@@ -13,7 +13,7 @@ class Solver:
     def __init__(self, filename=DEFAULT_FILE):
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
-        self.assignments = dict.fromkeys(list(self.vars), UNASSIGN)
+        self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
 
     def solve(self):
         pass
@@ -64,14 +64,15 @@ class Solver:
             :returns: value of the literal
         """
         logger.finest('literal: %s', literal)
+        logger.finest('assigns: %s', self.assigns)
         if literal == 0:
             raise ValueError('0 is an invalid literal!')
 
         variable = abs(literal)
-        if variable not in self.assignments:
+        if variable not in self.assigns:
             logger.finest('%s not in assignment', variable)
             return UNASSIGN
-        value = self.assignments[variable] ^ (literal < 0)
+        value = self.assigns[variable] ^ (literal < 0)
         logger.finest('value: %s', value)
         return value
 
@@ -81,7 +82,7 @@ class Solver:
 
     def compute_cnf(self):
         logger.debug('cnf: %s', self.cnf)
-        logger.debug('assignments: %s', self.assignments)
+        logger.debug('assignments: %s', self.assigns)
         return min(map(self.compute_clause, self.cnf))
 
     def is_unit_clause(self, clause):
@@ -104,7 +105,7 @@ class Solver:
         check = (values.count(FALSE) == len(clause) - 1 and
                  values.count(UNASSIGN) == 1)
         logger.finer('%s: %s', clause, (check, unassigned))
-        logger.finest('assignments: %s', self.assignments)
+        logger.finest('assignments: %s', self.assigns)
         return check, unassigned
 
     def assign_unassigned(self, literal):
@@ -115,8 +116,8 @@ class Solver:
         """
 
         variable = abs(literal)
-        self.assignments[variable] = TRUE if literal > 0 else FALSE
-        logger.finer('assigned %s to %s', variable, self.assignments[variable])
+        self.assigns[variable] = TRUE if literal > 0 else FALSE
+        logger.finer('assigned %s to %s', variable, self.assigns[variable])
 
     def unit_propagate(self):
         """
@@ -128,7 +129,7 @@ class Solver:
         for _, x in checks:
             logger.finest('x: %s', x)
             self.assign_unassigned(x)
-            logger.fine('assigned: %s, assignments: %s', x, self.assignments)
+            logger.fine('assigned: %s, assignments: %s', x, self.assigns)
         if self.get_unit_clauses():
             self.unit_propagate()
 
