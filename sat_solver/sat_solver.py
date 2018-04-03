@@ -2,7 +2,7 @@
 SAT solver using CDCL
 """
 from .constants import DEFAULT_FILE, TRUE, FALSE, UNASSIGN
-from .exceptions import FileFomratError
+from .exceptions import FileFormatError
 from .logger import set_logger
 
 logger = set_logger()
@@ -36,20 +36,20 @@ class Solver:
         if lines[0][:2] == ['p', 'cnf']:
             count_literals, count_clauses = map(int, lines[0][-2:])
         else:
-            raise FileFomratError('Number of literals and clauses are not declared properly.')
+            raise FileFormatError('Number of literals and clauses are not declared properly.')
 
         literals = set()
         clauses = set()
 
         for line in lines[1:]:
             if line[-1] != '0':
-                raise FileFomratError('Each line of clauses must end with 0.')
+                raise FileFormatError('Each line of clauses must end with 0.')
             clause = frozenset(map(int, line[:-1]))
             literals.update(map(abs, clause))
             clauses.add(clause)
 
         if len(literals) != count_literals or len(clauses) != count_clauses:
-            raise FileFomratError('Unmatched literal count or clause count.')
+            raise FileFormatError('Unmatched literal count or clause count.')
 
         logger.fine('clauses: %s', clauses)
         logger.fine('literals: %s', literals)
