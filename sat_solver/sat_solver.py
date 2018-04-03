@@ -135,3 +135,7 @@ class Solver:
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
+
+    def are_all_variables_assigned(self):
+        return all(var in self.assigns for var in self.vars) and \
+               not any(var for var in self.vars if self.assigns[var] == UNASSIGN)

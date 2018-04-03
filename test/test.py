@@ -22,12 +22,14 @@ assert s.is_unit_clause(frozenset([-1, 3]))[0]
 assert not s.is_unit_clause(frozenset([-1, 2]))[0]
 assert not s.is_unit_clause(frozenset([-2, 3]))[0]
 
-print(s.unit_propagate())
-"""
-
 s1 = sat_solver.Solver('../test/test1.cnf')
-s1.assignments = {
+s1.assigns = {
     1: 0,
-    4: 0
+    2: -1,
+    3: -1,
+    4: 0,
 }
+assert not s1.are_all_variables_assigned()
 s1.unit_propagate()
+assert s1.are_all_variables_assigned()
+
