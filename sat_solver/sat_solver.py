@@ -92,19 +92,31 @@ class Solver:
             :param clause: set of ints
             :returns: (is_clause_a_unit, the_literal)
         """
-
+        logger.finest('clause: %s', clause)
         values = []
         unassigned = None
 
         for literal in clause:
             value = self.compute_value(literal)
             values.append(value)
-            unassigned = literal if value == UNASSIGN else None
+            unassigned = literal if value == UNASSIGN else unassigned
 
         check = (values.count(FALSE) == len(clause) - 1 and
                  values.count(UNASSIGN) == 1)
-        logger.fine('%s: %s', clause, (check, unassigned))
+        logger.finer('%s: %s', clause, (check, unassigned))
+        logger.finest('assignments: %s', self.assignments)
         return check, unassigned
+
+    def assign_unassigned(self, literal):
+        """
+        Assign the variable such that literal's value is 1
+        :param literal:
+        :return:
+        """
+
+        variable = abs(literal)
+        self.assignments[variable] = TRUE if literal > 0 else FALSE
+        logger.finer('assigned %s to %s', variable, self.assignments[variable])
 
     def unit_propagate(self):
         """
@@ -112,6 +124,13 @@ class Solver:
         unassigned literal must be assigned to value 1. Unit propagation is the
         process of iteratively applying the unit clause rule.
         """
-        checks = list(map(self.is_unit_clause, self.cnf))
-        for x in [lit for yes, lit in checks if yes]:
-            print(x)
+        checks = self.get_unit_clauses()
+        for _, x in checks:
+            logger.finest('x: %s', x)
+            self.assign_unassigned(x)
+            logger.fine('assigned: %s, assignments: %s', x, self.assignments)
+        if self.get_unit_clauses():
+            self.unit_propagate()
+
+    def get_unit_clauses(self):
+        return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
