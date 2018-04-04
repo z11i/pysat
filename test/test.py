@@ -33,3 +33,6 @@ assert not s1.are_all_variables_assigned()
 s1.unit_propagate()
 assert s1.are_all_variables_assigned()
 
+s2 = sat_solver.Solver('../test/uf20-91/uf20-01.cnf')
+sat, spent = s2.run()
+print(sat, spent)

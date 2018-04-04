@@ -1,6 +1,7 @@
 """
 SAT solver using CDCL
 """
+import time
 from .constants import DEFAULT_FILE, TRUE, FALSE, UNASSIGN
 from .exceptions import FileFormatError, ConflictError
 from .logger import set_logger
@@ -14,6 +15,14 @@ class Solver:
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
+
+    def run(self):
+        start_time = time.time()
+        sat = self.solve()
+        spent = time.time() - start_time
+        logger.info('Equation is {}, resolved in {:.2f} ms'
+                    .format('SAT' if sat else 'UNSAT', spent))
+        return sat, spent
 
     def solve(self):
         """
@@ -33,6 +42,7 @@ class Solver:
                     return False
                 self.backtrack(lvl)
                 dec_lvl = lvl
+        return True
 
     @staticmethod
     def read_file(filename):
@@ -45,7 +55,7 @@ class Solver:
         """
         with open(filename) as f:
             lines = [
-                line.strip().split(' ') for line in f.readlines()
+                line.strip().split() for line in f.readlines()
                 if not line.startswith('c') and line != '\n'
             ]
 
@@ -65,7 +75,11 @@ class Solver:
             clauses.add(clause)
 
         if len(literals) != count_literals or len(clauses) != count_clauses:
-            raise FileFormatError('Unmatched literal count or clause count.')
+            raise FileFormatError(
+                'Unmatched literal count or clause count.'
+                ' Literals expected: {}, actual: {}.'
+                ' Clauses expected: {}, actual: {}.'
+                .format(count_literals, len(literals), count_clauses, len(clauses)))
 
         logger.fine('clauses: %s', clauses)
         logger.fine('literals: %s', literals)
