@@ -2,7 +2,7 @@
 SAT solver using CDCL
 """
 from .constants import DEFAULT_FILE, TRUE, FALSE, UNASSIGN
-from .exceptions import FileFormatError
+from .exceptions import FileFormatError, ConflictError
 from .logger import set_logger
 
 logger = set_logger()
@@ -115,20 +115,27 @@ class Solver:
         :return:
         """
 
-        variable = abs(literal)
-        self.assigns[variable] = TRUE if literal > 0 else FALSE
-        logger.finer('assigned %s to %s', variable, self.assigns[variable])
+        var = abs(literal)
+        value = TRUE if literal > 0 else FALSE
+        if self.assigns[var] ^ -value == 1:  # one of the values is 1, another is 0
+            raise ConflictError
+        self.assigns[var] = value
+        logger.finer('assigned %s to %s', var, self.assigns[var])
 
     def unit_propagate(self):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
         process of iteratively applying the unit clause rule.
+        :return: None if no conflict is detected, else return the literal
         """
         checks = self.get_unit_clauses()
         for _, x in checks:
-            logger.finest('x: %s', x)
-            self.assign_unassigned(x)
+            try:
+                self.assign_unassigned(x)
+            except ConflictError:
+                logger.fine('conflict detected for %s', x)
+                return x
             logger.fine('assigned: %s, assignments: %s', x, self.assigns)
         if self.get_unit_clauses():
             self.unit_propagate()
