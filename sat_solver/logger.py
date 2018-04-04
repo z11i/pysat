@@ -12,17 +12,17 @@ logging.addLevelName(logging.FINEST, 'FINEST')
 
 def fine(self, message, *args, **kws):
     if self.isEnabledFor(logging.FINE):
-        self._log(logging.FINE, message, args, **kws)
+        self._log(logging.FINE, '\t{}'.format(message), args, **kws)
 
 
 def finer(self, message, *args, **kws):
     if self.isEnabledFor(logging.FINER):
-        self._log(logging.FINER, message, args, **kws)
+        self._log(logging.FINER, '\t\t{}'.format(message), args, **kws)
 
 
 def finest(self, message, *args, **kws):
     if self.isEnabledFor(logging.FINEST):
-        self._log(logging.FINEST, message, args, **kws)
+        self._log(logging.FINEST, '\t\t\t{}'.format(message), args, **kws)
 
 
 logging.Logger.fine = fine
