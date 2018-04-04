@@ -16,7 +16,23 @@ class Solver:
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
 
     def solve(self):
-        pass
+        """
+        Returns TRUE if SAT, False if UNSAT
+        :return: whether there is a solution
+        """
+        if self.unit_propagate():
+            return False
+        dec_lvl = 0  # decision level
+        while not self.are_all_variables_assigned():
+            var, val = self.pick_branching_variable()
+            dec_lvl += 1
+            self.assigns[var] = val
+            if self.unit_propagate():
+                lvl = self.conflict_analyze()
+                if lvl < 0:
+                    return False
+                self.backtrack(lvl)
+                dec_lvl = lvl
 
     @staticmethod
     def read_file(filename):
@@ -144,5 +160,22 @@ class Solver:
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
 
     def are_all_variables_assigned(self):
-        return all(var in self.assigns for var in self.vars) and \
-               not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
+        all_assigned = all(var in self.assigns for var in self.vars)
+        none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
+        return all_assigned and none_unassigned
+
+    def pick_branching_variable(self):
+        """
+        Pick a variable to assign a value.
+        :return: variable, value assigned
+        """
+        var = next(filter(
+            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
+            self.vars))
+        return var, TRUE
+
+    def conflict_analyze(self):
+        return 0
+
+    def backtrack(self, level):
+        pass
