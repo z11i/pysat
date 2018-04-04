@@ -93,16 +93,8 @@ class Solver:
             :param literal: an int, can't be 0
             :returns: value of the literal
         """
-        logger.finest('literal: %s', literal)
-        logger.finest('assigns: %s', self.assigns)
-        if literal == 0:
-            raise ValueError('0 is an invalid literal!')
-
-        variable = abs(literal)
-        if variable not in self.assigns:
-            logger.finest('%s not in assignment', variable)
-            return UNASSIGN
-        value = self.assigns[variable] ^ (literal < 0)
+        value = self.assigns[abs(literal)]
+        value = value if value == UNASSIGN else value ^ (literal < 0)
         logger.finest('value: %s', value)
         return value
 
@@ -159,14 +151,20 @@ class Solver:
         process of iteratively applying the unit clause rule.
         :return: None if no conflict is detected, else return the literal
         """
+
         checks = self.get_unit_clauses()
-        for _, x in checks:
-            try:
-                self.assign_unassigned(x)
-            except ConflictError:
-                logger.fine('conflict detected for %s', x)
-                return x
-            logger.fine('assigned: %s, assignments: %s', x, self.assigns)
+
+        for _, lit, clause in checks:
+            var = abs(lit)
+            value = TRUE if lit > 0 else FALSE
+            if self.assigns[var] ^ -value == 1:  # one of the values is 1, another is 0
+                logger.debug('conflict detected for %s', lit)
+                return lit
+            self.assigns[var] = value
+            self.update_graph(var, value, clause)
+            logger.debug('propagated %s to be %s', var, value)
+            logger.finer('assignments: %s', self.assigns)
+
         if self.get_unit_clauses():
             self.unit_propagate()
 
