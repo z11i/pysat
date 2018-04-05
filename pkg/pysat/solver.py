@@ -3,17 +3,17 @@ SAT solver using CDCL
 """
 import pprint
 import time
-from .constants import DEFAULT_FILE, TRUE, FALSE, UNASSIGN
-from .exceptions import FileFormatError
-from .logger import set_logger
+from pkg.utils.constants import TRUE, FALSE, UNASSIGN
+from pkg.utils.exceptions import FileFormatError
+from pkg.utils.logger import set_logger
 
 logger = set_logger()
 
 
 class Solver:
 
-    def __init__(self, filename=DEFAULT_FILE):
-        logger.info('========= create solver from %s =========', filename)
+    def __init__(self, filename):
+        logger.info('========= create pysat from %s =========', filename)
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)

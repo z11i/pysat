@@ -3,7 +3,7 @@ SAT solver using CDCL
 """
 
 import argparse
-from sat_solver import sat_solver
+from pkg.pysat import solver
 
 
 if __name__ == '__main__':
@@ -18,11 +18,12 @@ if __name__ == '__main__':
         help='path of .cnf file')
     parser.add_argument(
         '--loglevel',
-        default='WARNING',
+        default='INFO',
         nargs='?',
         help='level of logging (WARNING, DEBUG, etc.)')
 
     args = parser.parse_args()
 
-    sat_solver.logger.setLevel(args.loglevel)
-    solver = sat_solver.Solver(filename=args.filename)
+    solver.logger.setLevel(args.loglevel)
+    solver = solver.Solver(filename=args.filename)
+    sat, time = solver.run()
