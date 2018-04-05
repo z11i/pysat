@@ -18,6 +18,7 @@ class Solver:
         self.cnf, self.vars = Solver.read_file(filename)
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
         self.nodes = dict((k, ImplicationNode(k, UNASSIGN)) for k in list(self.vars))
+        self.branching_vars = set()
 
     def run(self):
         start_time = time.time()
@@ -35,9 +36,12 @@ class Solver:
         # if self.unit_propagate():
         #     return False
         dec_lvl = 0  # decision level
+        bt_var = None  # backtrack variable
+        bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
             logger.debug('--------decision level: %s ---------', dec_lvl)
-            var, val = self.pick_branching_variable(dec_lvl)
+            var, val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
+            bt_var = bt_val = None
             logger.debug('picking %s to be %s', var, val)
             dec_lvl += 1
             self.assigns[var] = val
@@ -48,7 +52,7 @@ class Solver:
                 logger.debug('level reset to %s', lvl)
                 if lvl < 0:
                     return False
-                self.backtrack(lvl)
+                bt_var, bt_val = self.backtrack(lvl)
                 dec_lvl = lvl
         return True
 
@@ -142,7 +146,6 @@ class Solver:
         return check, unassigned, clause
 
     def update_graph(self, var, val, clause=None, level=-1):
-        logger.fine('updating graph for %s of value %s', var, val)
         node = self.nodes[var]
         node.value = val
         node.level = level
@@ -182,10 +185,10 @@ class Solver:
                 logger.debug('conflict detected for %s', lit)
                 return lit
             self.assigns[var] = value
+            logger.debug('propagated %s to be %s', var, value)
             conf_var, conf_cls = self.unit_propagate(var, level)
             if conf_var:
                 return conf_var, conf_cls
-            logger.debug('propagated %s to be %s', var, value)
             logger.finer('assignments: %s', self.assigns)
 
         return None, None
@@ -198,15 +201,18 @@ class Solver:
         none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
         return all_assigned and none_unassigned
 
-    def pick_branching_variable(self, level):
+    def pick_branching_variable(self, level, bt_var=None, bt_val=None):
         """
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
+        if bt_var is not None and bt_val is not None:
+            return bt_var, bt_val
         var = next(filter(
             lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
             self.vars))
         val = TRUE
+        self.branching_vars.add(var)
         self.update_graph(var, val, level=level)
         return var, val
 
@@ -233,18 +239,16 @@ class Solver:
         where the first-assigned variable involved in the conflict was assigned
         """
         logger.debug('backtracking to %s', level)
+        bt_var = None
+        bt_val = None
         for var, node in self.nodes.items():
             if node.level < level:
                 node.children[:] = [child for child in node.children if child.level >= level]
-            elif node.level == level:
-                value = node.value ^ TRUE
-                node.value = value
-                node.level = level
-                node.parents = []
-                node.children = []
-                node.clause = None
-                self.assigns[node.variable] = value
             else:
+                if node.level == level and node.variable in self.branching_vars:
+                    bt_var = node.variable
+                    bt_val = node.value ^ TRUE
+                    self.branching_vars.remove(node.variable)
                 node.value = UNASSIGN
                 node.level = -1
                 node.parents = []
@@ -254,6 +258,8 @@ class Solver:
 
         logger.fine('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
         logger.fine('after backtracking, assigns:\n%s', pprint.pformat(self.assigns))
+
+        return bt_var, bt_val
 
 
 class ImplicationNode:
