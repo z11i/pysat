@@ -68,7 +68,10 @@ class Solver:
         with open(filename) as f:
             lines = [
                 line.strip().split() for line in f.readlines()
-                if not line.startswith('c') and line != '\n'
+                if (not (line.startswith('c') or
+                         line.startswith('%') or
+                         line.startswith('0'))
+                    and line != '\n')
             ]
 
         if lines[0][:2] == ['p', 'cnf']:
