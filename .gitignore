@@ -136,7 +136,8 @@ venv.bak/
 
 ### venv ###
 # Linux
-bin/ 
+bin/
+bin/*
 include/
 
 # Window
