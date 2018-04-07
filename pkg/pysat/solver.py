@@ -24,7 +24,7 @@ class Solver:
         start_time = time.time()
         sat = self.solve()
         spent = time.time() - start_time
-        logger.info('Equation is {}, resolved in {:.2f} ms'
+        logger.info('Equation is {}, resolved in {:.2f} s'
                     .format('SAT' if sat else 'UNSAT', spent))
         return sat, spent
 
@@ -239,9 +239,25 @@ class Solver:
         learnt = frozenset([x for x in learnt if abs(x) != abs(conf_var)])
         self.cnf.add(learnt)
         logger.debug('learnt: %s', learnt)
-        learnt_min_level = min(map(lambda x: self.nodes[abs(x)].level, learnt))
-        branch_level = len(self.branching_vars) - 1
-        return min(branch_level, learnt_min_level)
+        parents_conflict = set()
+        for literal in conf_cls:
+            if abs(literal) == abs(conf_var):
+                continue
+            parents_conflict.add(abs(literal))
+            parents_conflict.update(
+                [x.variable for x in self.nodes[abs(literal)].all_parents()
+                 if x.variable in self.branching_vars])
+        parents_existing = set()
+        parents_existing.update(
+            [x.variable for x in self.nodes[abs(conf_var)].all_parents()
+             if x.variable in self.branching_vars])
+        disjunction = parents_existing.intersection(parents_conflict)
+
+        if disjunction:
+            level = self.nodes[min(disjunction)].level
+        else:
+            level = len(self.branching_vars) - 1
+        return level
 
     def backtrack(self, level):
         """
@@ -286,6 +302,13 @@ class ImplicationNode:
         self.parents = []
         self.children = []
         self.clause = None
+
+    def all_parents(self):
+        parents = set(self.parents)
+        for parent in self.parents:
+            for p in parent.all_parents():
+                parents.add(p)
+        return list(parents)
 
     def __str__(self):
         sign = '+' if self.value == TRUE else '-' if self.value == FALSE else '?'
