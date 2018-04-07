@@ -41,7 +41,7 @@ class Solver:
         while not self.are_all_variables_assigned():
             logger.debug('--------decision level: %s ---------', dec_lvl)
             var, val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
-            bt_var = bt_val = None
+            bt_var = bt_val = None  # reset branching variable we don't keep assigning it
             logger.debug('picking %s to be %s', var, val)
             dec_lvl += 1
             self.assigns[var] = val
@@ -210,11 +210,13 @@ class Solver:
         :return: variable, value assigned
         """
         if bt_var is not None and bt_val is not None:
-            return bt_var, bt_val
-        var = next(filter(
-            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
-            self.vars))
-        val = TRUE
+            var = bt_var
+            val = bt_val
+        else:
+            var = next(filter(
+                lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
+                self.vars))
+            val = TRUE
         self.branching_vars.add(var)
         self.update_graph(var, val, level=level)
         return var, val
@@ -230,11 +232,16 @@ class Solver:
         :param conf_cls: (set of int) the clause that introduces the conflict
         :return: decision level int
         """
+        logger.finer('conflict clause: %s', conf_cls)
+        logger.finer('existing clause: %s', self.nodes[conf_var].clause)
+
         learnt = conf_cls.union(self.nodes[conf_var].clause)
-        learnt = frozenset([-x for x in learnt if abs(x) != abs(conf_var)])
+        learnt = frozenset([x for x in learnt if abs(x) != abs(conf_var)])
         self.cnf.add(learnt)
         logger.debug('learnt: %s', learnt)
-        return min(map(lambda x: self.nodes[abs(x)].level, learnt))
+        learnt_min_level = min(map(lambda x: self.nodes[abs(x)].level, learnt))
+        branch_level = len(self.branching_vars) - 1
+        return min(branch_level, learnt_min_level)
 
     def backtrack(self, level):
         """
@@ -246,9 +253,10 @@ class Solver:
         bt_val = None
         for var, node in self.nodes.items():
             if node.level < level:
-                node.children[:] = [child for child in node.children if child.level >= level]
+                node.children[:] = [child for child in node.children if child.level < level]
             else:
                 if node.level == level and node.variable in self.branching_vars:
+                    # reset level to branching decision, remembers branching variable
                     bt_var = node.variable
                     bt_val = node.value ^ TRUE
                     self.branching_vars.remove(node.variable)
@@ -260,7 +268,6 @@ class Solver:
                 self.assigns[node.variable] = UNASSIGN
 
         logger.fine('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
-        logger.fine('after backtracking, assigns:\n%s', pprint.pformat(self.assigns))
 
         return bt_var, bt_val
 
