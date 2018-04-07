@@ -48,7 +48,7 @@ class Solver:
             conf_var, conf_cls = self.unit_propagate(var, dec_lvl)
             if conf_var:
                 logger.fine(self.nodes)
-                lvl = self.conflict_analyze(conf_var, conf_cls)
+                lvl = self.conflict_analyze(conf_var, conf_cls, dec_lvl - 1)
                 logger.debug('level reset to %s', lvl)
                 if lvl < 0:
                     return False
@@ -94,7 +94,7 @@ class Solver:
                 'Unmatched literal count or clause count.'
                 ' Literals expected: {}, actual: {}.'
                 ' Clauses expected: {}, actual: {}.'
-                .format(count_literals, len(literals), count_clauses, len(clauses)))
+                    .format(count_literals, len(literals), count_clauses, len(clauses)))
 
         logger.fine('clauses: %s', clauses)
         logger.fine('literals: %s', literals)
@@ -221,7 +221,7 @@ class Solver:
         self.update_graph(var, val, level=level)
         return var, val
 
-    def conflict_analyze(self, conf_var, conf_cls):
+    def conflict_analyze(self, conf_var, conf_cls, curr_level):
         """
         Analyze the most recent conflict and learn a new clause from the conflict.
         - Find the cut in the implication graph that led to the conflict
@@ -230,6 +230,7 @@ class Solver:
         Returns a decision level to be backtracked to.
         :param conf_var: (int) the variable that has conflicts
         :param conf_cls: (set of int) the clause that introduces the conflict
+        :param curr_level: (int) current decision level
         :return: decision level int
         """
         logger.finer('conflict clause: %s', conf_cls)
@@ -246,17 +247,17 @@ class Solver:
             parents_conflict.add(abs(literal))
             parents_conflict.update(
                 [x.variable for x in self.nodes[abs(literal)].all_parents()
-                 if x.variable in self.branching_vars])
+                 if x.variable in self.branching_vars and x.level != curr_level])
         parents_existing = set()
         parents_existing.update(
             [x.variable for x in self.nodes[abs(conf_var)].all_parents()
-             if x.variable in self.branching_vars])
+             if x.variable in self.branching_vars and x.level != curr_level])
         disjunction = parents_existing.intersection(parents_conflict)
 
         if disjunction:
-            level = self.nodes[min(disjunction)].level
+            level = self.nodes[max(disjunction)].level
         else:
-            level = len(self.branching_vars) - 1
+            level = curr_level - 1
         return level
 
     def backtrack(self, level):
@@ -275,13 +276,18 @@ class Solver:
                     # reset level to branching decision, remembers branching variable
                     bt_var = node.variable
                     bt_val = node.value ^ TRUE
-                    self.branching_vars.remove(node.variable)
                 node.value = UNASSIGN
                 node.level = -1
                 node.parents = []
                 node.children = []
                 node.clause = None
                 self.assigns[node.variable] = UNASSIGN
+
+        self.branching_vars = set([
+            var for var in self.vars
+            if (self.assigns[var] != UNASSIGN
+                and len(self.nodes[var].parents) == 0)
+        ])
 
         logger.fine('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
 
@@ -295,6 +301,7 @@ class ImplicationNode:
     - its implication children (list)
     - parent nodes (list)
     """
+
     def __init__(self, variable, value):
         self.variable = variable
         self.value = value
