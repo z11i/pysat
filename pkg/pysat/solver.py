@@ -89,7 +89,7 @@ class Solver:
             literals.update(map(abs, clause))
             clauses.add(clause)
 
-        if len(literals) != count_literals or len(clauses) != count_clauses:
+        if len(literals) != count_literals or len(lines) - 1 != count_clauses:
             raise FileFormatError(
                 'Unmatched literal count or clause count.'
                 ' Literals expected: {}, actual: {}.'
