@@ -3,6 +3,7 @@ SAT solver using CDCL
 """
 import pprint
 import time
+from collections import deque
 from pkg.utils.constants import TRUE, FALSE, UNASSIGN
 from pkg.utils.exceptions import FileFormatError
 from pkg.utils.logger import set_logger
@@ -19,6 +20,8 @@ class Solver:
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
         self.nodes = dict((k, ImplicationNode(k, UNASSIGN)) for k in list(self.vars))
         self.branching_vars = set()
+        self.branching_history = {}  # level -> branched variable
+        self.propagate_history = {}  # level -> propagate variables list
 
     def run(self):
         start_time = time.time()
@@ -39,13 +42,23 @@ class Solver:
         bt_var = None  # backtrack variable
         bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
+            dec_lvl += 1
             logger.debug('--------decision level: %s ---------', dec_lvl)
+
+            # branching
             var, val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
+            self.assigns[var] = val
+            self.branching_vars.add(var)
+            self.branching_history[dec_lvl] = var
+            self.propagate_history[dec_lvl] = deque()
+            self.update_graph(var, level=dec_lvl)
             bt_var = bt_val = None  # reset branching variable we don't keep assigning it
             logger.debug('picking %s to be %s', var, val)
-            dec_lvl += 1
-            self.assigns[var] = val
+            logger.debug('branching variables: %s', self.branching_history)
+
+            # unit propagation
             conf_var, conf_cls = self.unit_propagate(var, dec_lvl)
+            logger.debug('propagation history: %s', self.propagate_history)
             if conf_var:
                 logger.fine(self.nodes)
                 lvl = self.conflict_analyze(conf_var, conf_cls, dec_lvl - 1)
@@ -146,11 +159,14 @@ class Solver:
                  values.count(UNASSIGN) == 1)
         logger.finest('%s: %s', clause, (check, unassigned))
         logger.finest('assignments: %s', self.assigns)
-        return check, unassigned, clause
+        return check, unassigned
 
-    def update_graph(self, var, val, clause=None, level=-1):
+    def assign(self, literal):
+        """ Assign the variable so that literal is TRUE """
+
+    def update_graph(self, var, clause=None, level=-1):
         node = self.nodes[var]
-        node.value = val
+        node.value = self.assigns[var]
         node.level = level
 
         # update parents
@@ -161,40 +177,42 @@ class Solver:
             node.clause = clause
             logger.fine('node %s has parents: %s', var, node.parents)
 
-    def unit_propagate(self, var=None, level=0):
+    def unit_propagate(self, var, level):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
         process of iteratively applying the unit clause rule.
         :return: None if no conflict is detected, else return the literal
         """
-        # check for unsatisfied clauses
-        if var:
-            unsats = list(filter(lambda c: self.compute_clause(c) == 0, self.cnf))
-            if unsats:
-                logger.debug('unsatisfied clause detected: %s when %s is assigned %s',
-                             unsats[0], var, self.assigns[var])
-                return var, unsats[0]
+        propagate_queue = deque()
+        propagate_queue.append((var, None))
+        conflict_list = deque()
+        while propagate_queue:
+            logger.fine('propagate_queue: %s', propagate_queue)
+            prop_lit, reason = propagate_queue.popleft()
+            logger.fine('pop: %s', prop_lit)
 
-        # check for unit clauses to implicate new assignments
-        unit_clauses = self.get_unit_clauses()
+            prop_var = abs(prop_lit)
+            if self.assigns[prop_var] == UNASSIGN:
+                self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
+                logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
+                self.update_graph(prop_var, clause=reason, level=level)
+                self.propagate_history[level].append(prop_var)
 
-        for _, lit, clause in unit_clauses:
-            var = abs(lit)
-            value = TRUE if lit > 0 else FALSE
-            self.update_graph(var, value, clause, level)
-            if self.assigns[var] ^ value == 1:  # one of the values is 1, another is 0
-                logger.fine('parents of %s: %s', var, self.nodes[var].parents)
-                logger.debug('conflict detected for %s', lit)
-                return lit
-            self.assigns[var] = value
-            logger.debug('propagated %s to be %s, because %s', var, value, self.nodes[var].clause)
-            conf_var, conf_cls = self.unit_propagate(var, level)
-            if conf_var:
-                return conf_var, conf_cls
-            logger.finer('assignments: %s', self.assigns)
+            for c in [x for x in self.cnf
+                      if prop_lit in x or -prop_lit in x]:
+                c_val = self.compute_clause(c)
+                if c_val == TRUE:
+                    continue
+                if c_val == FALSE and c != self.nodes[prop_var].clause:
+                    conflict_list.append((prop_var, c))
+                else:
+                    is_unit, unit_lit = self.is_unit_clause(c)
+                    if not is_unit:
+                        continue
+                    propagate_queue.append((unit_lit, c))
 
-        return None, None
+        return (None, None) if not conflict_list else conflict_list[0]
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
@@ -209,7 +227,7 @@ class Solver:
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
-        if bt_var is not None and bt_val is not None:
+        if all((bt_var, bt_val)):
             var = bt_var
             val = bt_val
         else:
@@ -217,8 +235,6 @@ class Solver:
                 lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
                 self.vars))
             val = TRUE
-        self.branching_vars.add(var)
-        self.update_graph(var, val, level=level)
         return var, val
 
     def conflict_analyze(self, conf_var, conf_cls, curr_level):
