@@ -159,7 +159,7 @@ class Solver:
                 node.parents.append(self.nodes[v])
                 self.nodes[v].children.append(node)
             node.clause = clause
-            logger.finer('node %s has parents: %s', var, node.parents)
+            logger.fine('node %s has parents: %s', var, node.parents)
 
     def unit_propagate(self, var=None, level=0):
         """
@@ -188,7 +188,7 @@ class Solver:
                 logger.debug('conflict detected for %s', lit)
                 return lit
             self.assigns[var] = value
-            logger.debug('propagated %s to be %s', var, value)
+            logger.debug('propagated %s to be %s, because %s', var, value, self.nodes[var].clause)
             conf_var, conf_cls = self.unit_propagate(var, level)
             if conf_var:
                 return conf_var, conf_cls
@@ -233,8 +233,8 @@ class Solver:
         :param curr_level: (int) current decision level
         :return: decision level int
         """
-        logger.finer('conflict clause: %s', conf_cls)
-        logger.finer('existing clause: %s', self.nodes[conf_var].clause)
+        logger.fine('conflict clause: %s', conf_cls)
+        logger.fine('existing clause: %s', self.nodes[conf_var].clause)
 
         learnt = conf_cls.union(self.nodes[conf_var].clause)
         learnt = frozenset([x for x in learnt if abs(x) != abs(conf_var)])
@@ -289,7 +289,7 @@ class Solver:
                 and len(self.nodes[var].parents) == 0)
         ])
 
-        logger.fine('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
+        logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
 
         return bt_var, bt_val
 
