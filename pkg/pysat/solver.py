@@ -42,25 +42,10 @@ class Solver:
         bt_var = None  # backtrack variable
         bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
-            dec_lvl += 1
-            logger.debug('--------decision level: %s ---------', dec_lvl)
-
-            # branching
-            var, val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
-            self.assigns[var] = val
-            self.branching_vars.add(var)
-            self.branching_history[dec_lvl] = var
-            self.propagate_history[dec_lvl] = deque()
-            self.update_graph(var, level=dec_lvl)
-            bt_var = bt_val = None  # reset branching variable we don't keep assigning it
-            logger.debug('picking %s to be %s', var, val)
-            logger.debug('branching variables: %s', self.branching_history)
-
-            # unit propagation
-            conf_var, conf_cls = self.unit_propagate(var, dec_lvl)
-            logger.debug('propagation history: %s', self.propagate_history)
-            if conf_var:
-                logger.fine(self.nodes)
+            conf_var, conf_cls = self.unit_propagate(bt_var, level=dec_lvl)
+            if conf_var is not None:
+                # there is conflict in unit propagation
+                logger.fine('implication nodes: %s', self.nodes)
                 lvl, learnt = self.conflict_analyze(conf_var, conf_cls, dec_lvl)
                 logger.debug('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
@@ -69,6 +54,23 @@ class Solver:
                 self.cnf.add(learnt)
                 bt_var, bt_val = self.backtrack(lvl)
                 dec_lvl = lvl
+            elif self.are_all_variables_assigned():
+                break
+            else:
+                # branching
+                dec_lvl += 1
+                logger.debug('--------decision level: %s ---------', dec_lvl)
+                bt_var, bt_val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
+                self.assigns[bt_var] = bt_val
+                self.branching_vars.add(bt_var)
+                self.branching_history[dec_lvl] = bt_var
+                self.propagate_history[dec_lvl] = deque()
+                self.update_graph(bt_var, level=dec_lvl)
+                logger.debug('picking %s to be %s', bt_var, bt_val)
+                logger.debug('branching variables: %s', self.branching_history)
+
+                bt_var = bt_val = None  # reset branching variable we don't keep assigning it
+            logger.debug('propagate variables: %s', self.propagate_history)
         return True
 
     @staticmethod
@@ -187,12 +189,19 @@ class Solver:
         :return: None if no conflict is detected, else return the literal
         """
         propagate_queue = deque()
-        propagate_queue.append((var, None))
-        conflict_list = deque()
+        if var is None:
+            # when no var is specified, we want to check all unit propagation
+            for _, v in self.branching_history.items():
+                propagate_queue.append((v, None))
+        elif var != self.branching_history[level]:
+            return None, None
+        else:
+            propagate_queue.append((var, None))
+
         while propagate_queue:
             logger.fine('propagate_queue: %s', propagate_queue)
             prop_lit, reason = propagate_queue.popleft()
-            logger.fine('pop: %s', prop_lit)
+            logger.finest('pop: %s', prop_lit)
 
             prop_var = abs(prop_lit)
             if self.assigns[prop_var] == UNASSIGN:
@@ -207,14 +216,14 @@ class Solver:
                 if c_val == TRUE:
                     continue
                 if c_val == FALSE and c != self.nodes[prop_var].clause:
-                    conflict_list.append((prop_var, c))
+                    return prop_var, c
                 else:
                     is_unit, unit_lit = self.is_unit_clause(c)
                     if not is_unit:
                         continue
                     propagate_queue.append((unit_lit, c))
 
-        return (None, None) if not conflict_list else conflict_list[0]
+        return None, None
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
@@ -274,6 +283,7 @@ class Solver:
         prev_level_lits = set()
 
         while True:
+            logger.fine('-------')
             logger.fine('pool lits: %s', pool_lits)
             for lit in pool_lits:
                 if self.nodes[abs(lit)].level == curr_level:
