@@ -229,7 +229,7 @@ class Solver:
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
-        if all((bt_var, bt_val)):
+        if bt_var is not None and bt_val is not None:
             var = bt_var
             val = bt_val
         else:
@@ -282,6 +282,7 @@ class Solver:
                     prev_level_lits.add(lit)
 
             logger.fine('curr level lits: %s', curr_level_lits)
+            logger.fine('prev level lits: %s', prev_level_lits)
             if len(curr_level_lits) == 1:
                 break
 
@@ -312,10 +313,10 @@ class Solver:
         bt_var = None
         bt_val = None
         for var, node in self.nodes.items():
-            if node.level < level:
-                node.children[:] = [child for child in node.children if child.level < level]
+            if node.level <= level:
+                node.children[:] = [child for child in node.children if child.level <= level]
             else:
-                if node.level == level and node.variable in self.branching_vars:
+                if node.level == level + 1 and node.variable in self.branching_vars:
                     # reset level to branching decision, remembers branching variable
                     bt_var = node.variable
                     bt_val = node.value ^ TRUE
@@ -331,6 +332,13 @@ class Solver:
             if (self.assigns[var] != UNASSIGN
                 and len(self.nodes[var].parents) == 0)
         ])
+
+        levels = list(self.propagate_history.keys())
+        for k in levels:
+            if k <= level:
+                continue
+            del self.branching_history[k]
+            del self.propagate_history[k]
 
         logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
 
