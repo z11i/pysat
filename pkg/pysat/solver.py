@@ -61,10 +61,12 @@ class Solver:
             logger.debug('propagation history: %s', self.propagate_history)
             if conf_var:
                 logger.fine(self.nodes)
-                lvl = self.conflict_analyze(conf_var, conf_cls, dec_lvl - 1)
+                lvl, learnt = self.conflict_analyze(conf_var, conf_cls, dec_lvl)
                 logger.debug('level reset to %s', lvl)
+                logger.debug('learnt: %s', learnt)
                 if lvl < 0:
                     return False
+                self.cnf.add(learnt)
                 bt_var, bt_val = self.backtrack(lvl)
                 dec_lvl = lvl
         return True
@@ -197,7 +199,7 @@ class Solver:
                 self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
                 logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
                 self.update_graph(prop_var, clause=reason, level=level)
-                self.propagate_history[level].append(prop_var)
+                self.propagate_history[level].append(prop_lit)
 
             for c in [x for x in self.cnf
                       if prop_lit in x or -prop_lit in x]:
@@ -247,34 +249,59 @@ class Solver:
         :param conf_var: (int) the variable that has conflicts
         :param conf_cls: (set of int) the clause that introduces the conflict
         :param curr_level: (int) current decision level
-        :return: decision level int
+        :return: ({int} level to backtrack to, {set(int)} clause learnt)
         """
+        def next_recent_assigned(clause):
+            """
+            According to the assign history, separate the latest assigned variable
+            with the rest in `clause`
+            :param clause: {set of int} the clause to separate
+            :return: ({int} variable, [int] other variables in clause)
+            """
+            for v in reversed(assign_history):
+                if v in clause or -v in clause:
+                    return v, [x for x in clause if abs(x) != abs(v)]
+
         logger.fine('conflict clause: %s', conf_cls)
         logger.fine('existing clause: %s', self.nodes[conf_var].clause)
 
-        learnt = conf_cls.union(self.nodes[conf_var].clause)
-        learnt = frozenset([x for x in learnt if abs(x) != abs(conf_var)])
-        self.cnf.add(learnt)
-        logger.debug('learnt: %s', learnt)
-        parents_conflict = set()
-        for literal in conf_cls:
-            if abs(literal) == abs(conf_var):
-                continue
-            parents_conflict.add(abs(literal))
-            parents_conflict.update(
-                [x.variable for x in self.nodes[abs(literal)].all_parents()
-                 if x.variable in self.branching_vars and x.level != curr_level])
-        parents_existing = set()
-        parents_existing.update(
-            [x.variable for x in self.nodes[abs(conf_var)].all_parents()
-             if x.variable in self.branching_vars and x.level != curr_level])
-        disjunction = parents_existing.intersection(parents_conflict)
+        assign_history = [self.branching_history[curr_level]] + list(self.propagate_history[curr_level])
+        logger.fine('assign history for level %s: %s', curr_level, assign_history)
 
-        if disjunction:
-            level = self.nodes[max(disjunction)].level
+        pool_lits = conf_cls
+        done_lits = set()
+        curr_level_lits = set()
+        prev_level_lits = set()
+
+        while True:
+            logger.fine('pool lits: %s', pool_lits)
+            for lit in pool_lits:
+                if self.nodes[abs(lit)].level == curr_level:
+                    curr_level_lits.add(lit)
+                else:
+                    prev_level_lits.add(lit)
+
+            logger.fine('curr level lits: %s', curr_level_lits)
+            if len(curr_level_lits) == 1:
+                break
+
+            last_assigned, others = next_recent_assigned(curr_level_lits)
+            logger.fine('last assigned: %s, others: %s', last_assigned, others)
+
+            done_lits.add(abs(last_assigned))
+            curr_level_lits = set(others)
+            pool_lits = [l for l in self.nodes[abs(last_assigned)].clause
+                         if abs(l) not in done_lits]
+
+            logger.fine('done lits: %s', done_lits)
+
+        learnt = frozenset([l for l in curr_level_lits.union(prev_level_lits)])
+        if prev_level_lits:
+            level = max([self.nodes[abs(x)].level for x in prev_level_lits])
         else:
             level = curr_level - 1
-        return level
+
+        return level, learnt
 
     def backtrack(self, level):
         """
