@@ -18,6 +18,7 @@ class Solver:
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
+        self.level = 0
         self.nodes = dict((k, ImplicationNode(k, UNASSIGN)) for k in list(self.vars))
         self.branching_vars = set()
         self.branching_history = {}  # level -> branched variable
@@ -38,34 +39,32 @@ class Solver:
         """
         # if self.unit_propagate():
         #     return False
-        dec_lvl = 0  # decision level
         bt_var = None  # backtrack variable
         bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
-            conf_var, conf_cls = self.unit_propagate(bt_var, level=dec_lvl)
+            conf_var, conf_cls = self.unit_propagate(bt_var)
             if conf_var is not None:
                 # there is conflict in unit propagation
                 logger.fine('implication nodes: %s', self.nodes)
-                lvl, learnt = self.conflict_analyze(conf_var, conf_cls, dec_lvl)
+                lvl, learnt = self.conflict_analyze(conf_var, conf_cls)
                 logger.debug('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
-                if lvl < 0:
+                if lvl == 0:
                     return False
                 self.cnf.add(learnt)
+                self.level = lvl
                 bt_var, bt_val = self.backtrack(lvl)
-                dec_lvl = lvl
             elif self.are_all_variables_assigned():
                 break
             else:
                 # branching
-                dec_lvl += 1
-                logger.debug('--------decision level: %s ---------', dec_lvl)
-                bt_var, bt_val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
+                bt_var, bt_val = self.pick_branching_variable(bt_var, bt_val)
+                logger.debug('--------decision level: %s ---------', self.level)
                 self.assigns[bt_var] = bt_val
                 self.branching_vars.add(bt_var)
-                self.branching_history[dec_lvl] = bt_var
-                self.propagate_history[dec_lvl] = deque()
-                self.update_graph(bt_var, level=dec_lvl)
+                self.branching_history[self.level] = bt_var
+                self.propagate_history[self.level] = deque()
+                self.update_graph(bt_var)
                 logger.debug('picking %s to be %s', bt_var, bt_val)
                 logger.debug('branching variables: %s', self.branching_history)
 
@@ -168,10 +167,10 @@ class Solver:
     def assign(self, literal):
         """ Assign the variable so that literal is TRUE """
 
-    def update_graph(self, var, clause=None, level=-1):
+    def update_graph(self, var, clause=None):
         node = self.nodes[var]
         node.value = self.assigns[var]
-        node.level = level
+        node.level = self.level
 
         # update parents
         if clause:  # clause is None, meaning this is branching, no parents to update
@@ -181,7 +180,7 @@ class Solver:
             node.clause = clause
             logger.fine('node %s has parents: %s', var, node.parents)
 
-    def unit_propagate(self, var, level):
+    def unit_propagate(self, var):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
@@ -193,7 +192,7 @@ class Solver:
             # when no var is specified, we want to check all unit propagation
             for _, v in self.branching_history.items():
                 propagate_queue.append((v, None))
-        elif var != self.branching_history[level]:
+        elif var != self.branching_history[self.level]:
             return None, None
         else:
             propagate_queue.append((var, None))
@@ -207,8 +206,8 @@ class Solver:
             if self.assigns[prop_var] == UNASSIGN:
                 self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
                 logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
-                self.update_graph(prop_var, clause=reason, level=level)
-                self.propagate_history[level].append(prop_lit)
+                self.update_graph(prop_var, clause=reason)
+                self.propagate_history[self.level].append(prop_lit)
 
             for c in [x for x in self.cnf
                       if prop_lit in x or -prop_lit in x]:
@@ -233,7 +232,7 @@ class Solver:
         none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
         return all_assigned and none_unassigned
 
-    def pick_branching_variable(self, level, bt_var=None, bt_val=None):
+    def pick_branching_variable(self, bt_var=None, bt_val=None):
         """
         Pick a variable to assign a value.
         :return: variable, value assigned
@@ -246,9 +245,10 @@ class Solver:
                 lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
                 self.vars))
             val = TRUE
+            self.level += 1
         return var, val
 
-    def conflict_analyze(self, conf_var, conf_cls, curr_level):
+    def conflict_analyze(self, conf_var, conf_cls):
         """
         Analyze the most recent conflict and learn a new clause from the conflict.
         - Find the cut in the implication graph that led to the conflict
@@ -257,7 +257,6 @@ class Solver:
         Returns a decision level to be backtracked to.
         :param conf_var: (int) the variable that has conflicts
         :param conf_cls: (set of int) the clause that introduces the conflict
-        :param curr_level: (int) current decision level
         :return: ({int} level to backtrack to, {set(int)} clause learnt)
         """
         def next_recent_assigned(clause):
@@ -274,8 +273,8 @@ class Solver:
         logger.fine('conflict clause: %s', conf_cls)
         logger.fine('existing clause: %s', self.nodes[conf_var].clause)
 
-        assign_history = [self.branching_history[curr_level]] + list(self.propagate_history[curr_level])
-        logger.fine('assign history for level %s: %s', curr_level, assign_history)
+        assign_history = [self.branching_history[self.level]] + list(self.propagate_history[self.level])
+        logger.fine('assign history for level %s: %s', self.level, assign_history)
 
         pool_lits = conf_cls
         done_lits = set()
@@ -286,7 +285,7 @@ class Solver:
             logger.fine('-------')
             logger.fine('pool lits: %s', pool_lits)
             for lit in pool_lits:
-                if self.nodes[abs(lit)].level == curr_level:
+                if self.nodes[abs(lit)].level == self.level:
                     curr_level_lits.add(lit)
                 else:
                     prev_level_lits.add(lit)
@@ -310,7 +309,7 @@ class Solver:
         if prev_level_lits:
             level = max([self.nodes[abs(x)].level for x in prev_level_lits])
         else:
-            level = curr_level - 1
+            level = self.level - 1
 
         return level, learnt
 
