@@ -210,7 +210,10 @@ class Solver:
                 self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
                 logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
                 self.update_graph(prop_var, clause=clause)
-                self.propagate_history[self.level].append(prop_lit)
+                try:
+                    self.propagate_history[self.level].append(prop_lit)
+                except KeyError:
+                    pass  # propagated at level 0
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
