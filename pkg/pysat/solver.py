@@ -17,6 +17,7 @@ class Solver:
         logger.info('========= create pysat from %s =========', filename)
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
+        self.learnts = set()
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
         self.level = 0
         self.nodes = dict((k, ImplicationNode(k, UNASSIGN)) for k in list(self.vars))
@@ -39,37 +40,35 @@ class Solver:
         """
         # if self.unit_propagate():
         #     return False
-        bt_var = None  # backtrack variable
-        bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
-            conf_var, conf_cls = self.unit_propagate(bt_var)
+            conf_var, conf_cls = self.unit_propagate()
             if conf_var is not None:
                 # there is conflict in unit propagation
-                logger.fine('implication nodes: %s', self.nodes)
+                logger.fine('implication nodes: \n%s', pprint.pformat(self.nodes))
                 lvl, learnt = self.conflict_analyze(conf_var, conf_cls)
                 logger.debug('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
                 if lvl == 0:
                     return False
-                self.cnf.add(learnt)
+                self.learnts.add(learnt)
+                self.backtrack(lvl)
                 self.level = lvl
-                bt_var, bt_val = self.backtrack(lvl)
             elif self.are_all_variables_assigned():
                 break
             else:
                 # branching
-                bt_var, bt_val = self.pick_branching_variable(bt_var, bt_val)
+                bt_var = self.pick_branching_variable()
                 logger.debug('--------decision level: %s ---------', self.level)
-                self.assigns[bt_var] = bt_val
+                self.assigns[bt_var] = TRUE
                 self.branching_vars.add(bt_var)
                 self.branching_history[self.level] = bt_var
                 self.propagate_history[self.level] = deque()
                 self.update_graph(bt_var)
-                logger.debug('picking %s to be %s', bt_var, bt_val)
+                logger.debug('picking %s to be TRUE', bt_var)
                 logger.debug('branching variables: %s', self.branching_history)
 
-                bt_var = bt_val = None  # reset branching variable we don't keep assigning it
             logger.debug('propagate variables: %s', self.propagate_history)
+            logger.debug('learnts: \n%s', pprint.pformat(self.learnts))
         return True
 
     @staticmethod
@@ -180,7 +179,7 @@ class Solver:
             node.clause = clause
             logger.fine('node %s has parents: %s', var, node.parents)
 
-    def unit_propagate(self, var):
+    def unit_propagate(self):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
@@ -188,14 +187,8 @@ class Solver:
         :return: None if no conflict is detected, else return the literal
         """
         propagate_queue = deque()
-        if var is None:
-            # when no var is specified, we want to check all unit propagation
-            for _, v in self.branching_history.items():
-                propagate_queue.append((v, None))
-        elif var != self.branching_history[self.level]:
-            return None, None
-        else:
-            propagate_queue.append((var, None))
+        for _, v in self.branching_history.items():
+            propagate_queue.append((v, None))
 
         while propagate_queue:
             logger.fine('propagate_queue: %s', propagate_queue)
@@ -209,7 +202,7 @@ class Solver:
                 self.update_graph(prop_var, clause=reason)
                 self.propagate_history[self.level].append(prop_lit)
 
-            for c in [x for x in self.cnf
+            for c in [x for x in self.cnf.union(self.learnts)
                       if prop_lit in x or -prop_lit in x]:
                 c_val = self.compute_clause(c)
                 if c_val == TRUE:
@@ -220,7 +213,8 @@ class Solver:
                     is_unit, unit_lit = self.is_unit_clause(c)
                     if not is_unit:
                         continue
-                    propagate_queue.append((unit_lit, c))
+                    if (unit_lit, c) not in propagate_queue:
+                        propagate_queue.append((unit_lit, c))
 
         return None, None
 
@@ -232,21 +226,17 @@ class Solver:
         none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
         return all_assigned and none_unassigned
 
-    def pick_branching_variable(self, bt_var=None, bt_val=None):
+    # def pick_branching_variable(self, bt_var=None, bt_val=None):
+    def pick_branching_variable(self):
         """
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
-        if bt_var is not None and bt_val is not None:
-            var = bt_var
-            val = bt_val
-        else:
-            var = next(filter(
-                lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
-                self.vars))
-            val = TRUE
-            self.level += 1
-        return var, val
+        self.level += 1
+        var = next(filter(
+            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
+            self.vars))
+        return var
 
     def conflict_analyze(self, conf_var, conf_cls):
         """
@@ -300,8 +290,10 @@ class Solver:
 
             done_lits.add(abs(last_assigned))
             curr_level_lits = set(others)
-            pool_lits = [l for l in self.nodes[abs(last_assigned)].clause
-                         if abs(l) not in done_lits]
+
+            pool_clause = self.nodes[abs(last_assigned)].clause
+            pool_lits = [l for l in pool_clause
+                         if abs(l) not in done_lits] if pool_clause is not None else []
 
             logger.fine('done lits: %s', done_lits)
 
@@ -319,16 +311,10 @@ class Solver:
         where the first-assigned variable involved in the conflict was assigned
         """
         logger.debug('backtracking to %s', level)
-        bt_var = None
-        bt_val = None
         for var, node in self.nodes.items():
             if node.level <= level:
                 node.children[:] = [child for child in node.children if child.level <= level]
             else:
-                if node.level == level + 1 and node.variable in self.branching_vars:
-                    # reset level to branching decision, remembers branching variable
-                    bt_var = node.variable
-                    bt_val = node.value ^ TRUE
                 node.value = UNASSIGN
                 node.level = -1
                 node.parents = []
@@ -350,8 +336,6 @@ class Solver:
             del self.propagate_history[k]
 
         logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
-
-        return bt_var, bt_val
 
 
 class ImplicationNode:
@@ -379,8 +363,8 @@ class ImplicationNode:
 
     def __str__(self):
         sign = '+' if self.value == TRUE else '-' if self.value == FALSE else '?'
-        return "[{}{}:L{}, {}p, {}c]".format(
-            sign, self.variable, self.level, len(self.parents), len(self.children))
+        return "[{}{}:L{}, {}p, {}c, {}]".format(
+            sign, self.variable, self.level, len(self.parents), len(self.children), self.clause)
 
     def __repr__(self):
         return str(self)
