@@ -41,11 +41,11 @@ class Solver:
         # if self.unit_propagate():
         #     return False
         while not self.are_all_variables_assigned():
-            conf_var, conf_cls = self.unit_propagate()
-            if conf_var is not None:
+            conf_cls = self.unit_propagate()
+            if conf_cls is not None:
                 # there is conflict in unit propagation
                 logger.fine('implication nodes: \n%s', pprint.pformat(self.nodes))
-                lvl, learnt = self.conflict_analyze(conf_var, conf_cls)
+                lvl, learnt = self.conflict_analyze(conf_cls)
                 logger.debug('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
                 if lvl == 0:
@@ -186,37 +186,31 @@ class Solver:
         process of iteratively applying the unit clause rule.
         :return: None if no conflict is detected, else return the literal
         """
-        propagate_queue = deque()
-        for _, v in self.branching_history.items():
-            propagate_queue.append((v, None))
-
-        while propagate_queue:
-            logger.fine('propagate_queue: %s', propagate_queue)
-            prop_lit, reason = propagate_queue.popleft()
-            logger.finest('pop: %s', prop_lit)
-
-            prop_var = abs(prop_lit)
-            if self.assigns[prop_var] == UNASSIGN:
-                self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
-                logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
-                self.update_graph(prop_var, clause=reason)
-                self.propagate_history[self.level].append(prop_lit)
-
-            for c in [x for x in self.cnf.union(self.learnts)
-                      if prop_lit in x or -prop_lit in x]:
-                c_val = self.compute_clause(c)
+        while True:
+            propagate_queue = deque()
+            for clause in [x for x in self.cnf.union(self.learnts)]:
+                c_val = self.compute_clause(clause)
                 if c_val == TRUE:
                     continue
-                if c_val == FALSE and c != self.nodes[prop_var].clause:
-                    return prop_var, c
+                if c_val == FALSE:
+                    return clause
                 else:
-                    is_unit, unit_lit = self.is_unit_clause(c)
+                    is_unit, unit_lit = self.is_unit_clause(clause)
                     if not is_unit:
                         continue
-                    if (unit_lit, c) not in propagate_queue:
-                        propagate_queue.append((unit_lit, c))
+                    prop_pair = (unit_lit, clause)
+                    if prop_pair not in propagate_queue:
+                        propagate_queue.append(prop_pair)
+            if not propagate_queue:
+                return None
+            logger.fine('propagate_queue: %s', propagate_queue)
 
-        return None, None
+            for prop_lit, clause in propagate_queue:
+                prop_var = abs(prop_lit)
+                self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
+                logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
+                self.update_graph(prop_var, clause=clause)
+                self.propagate_history[self.level].append(prop_lit)
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
@@ -238,14 +232,13 @@ class Solver:
             self.vars))
         return var
 
-    def conflict_analyze(self, conf_var, conf_cls):
+    def conflict_analyze(self, conf_cls):
         """
         Analyze the most recent conflict and learn a new clause from the conflict.
         - Find the cut in the implication graph that led to the conflict
         - Derive a new clause which is the negation of the assignments that led to the conflict
 
         Returns a decision level to be backtracked to.
-        :param conf_var: (int) the variable that has conflicts
         :param conf_cls: (set of int) the clause that introduces the conflict
         :return: ({int} level to backtrack to, {set(int)} clause learnt)
         """
@@ -261,7 +254,6 @@ class Solver:
                     return v, [x for x in clause if abs(x) != abs(v)]
 
         logger.fine('conflict clause: %s', conf_cls)
-        logger.fine('existing clause: %s', self.nodes[conf_var].clause)
 
         assign_history = [self.branching_history[self.level]] + list(self.propagate_history[self.level])
         logger.fine('assign history for level %s: %s', self.level, assign_history)
