@@ -2,7 +2,7 @@ import os
 from pkg.pysat import solver
 solver.logger.setLevel('INFO')
 
-expected_sat_count = 1000
+expected_count = 0
 actual_sat_count = 0
 actual_unsat_count = 0
 
@@ -19,7 +19,8 @@ for file in dirs:
         actual_sat_count += 1
     else:
         actual_unsat_count += 1
+    expected_count += 1
 
-print(f'Correct results: {actual_sat_count}/{expected_sat_count}')
+print(f'Correct results: {actual_sat_count}/{expected_count}')
 print(f'False negative: {actual_unsat_count}')
-print(f'Average time used: {time / expected_sat_count:.2f} s')
+print(f'Average time used: {time / expected_count:.2f} s')
