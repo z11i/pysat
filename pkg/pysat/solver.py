@@ -3,6 +3,7 @@ SAT solver using CDCL
 """
 import pprint
 import time
+from collections import deque
 from pkg.utils.constants import TRUE, FALSE, UNASSIGN
 from pkg.utils.exceptions import FileFormatError
 from pkg.utils.logger import set_logger
@@ -16,9 +17,13 @@ class Solver:
         logger.info('========= create pysat from %s =========', filename)
         self.filename = filename
         self.cnf, self.vars = Solver.read_file(filename)
+        self.learnts = set()
         self.assigns = dict.fromkeys(list(self.vars), UNASSIGN)
+        self.level = 0
         self.nodes = dict((k, ImplicationNode(k, UNASSIGN)) for k in list(self.vars))
         self.branching_vars = set()
+        self.branching_history = {}  # level -> branched variable
+        self.propagate_history = {}  # level -> propagate variables list
 
     def run(self):
         start_time = time.time()
@@ -35,25 +40,35 @@ class Solver:
         """
         # if self.unit_propagate():
         #     return False
-        dec_lvl = 0  # decision level
-        bt_var = None  # backtrack variable
-        bt_val = None  # backtrack value
         while not self.are_all_variables_assigned():
-            logger.debug('--------decision level: %s ---------', dec_lvl)
-            var, val = self.pick_branching_variable(dec_lvl, bt_var, bt_val)
-            bt_var = bt_val = None  # reset branching variable we don't keep assigning it
-            logger.debug('picking %s to be %s', var, val)
-            dec_lvl += 1
-            self.assigns[var] = val
-            conf_var, conf_cls = self.unit_propagate(var, dec_lvl)
-            if conf_var:
-                logger.fine(self.nodes)
-                lvl = self.conflict_analyze(conf_var, conf_cls, dec_lvl - 1)
+            conf_cls = self.unit_propagate()
+            if conf_cls is not None:
+                # there is conflict in unit propagation
+                logger.fine('implication nodes: \n%s', pprint.pformat(self.nodes))
+                lvl, learnt = self.conflict_analyze(conf_cls)
                 logger.debug('level reset to %s', lvl)
-                if lvl < 0:
+                logger.debug('learnt: %s', learnt)
+                if lvl == 0:
                     return False
-                bt_var, bt_val = self.backtrack(lvl)
-                dec_lvl = lvl
+                self.learnts.add(learnt)
+                self.backtrack(lvl)
+                self.level = lvl
+            elif self.are_all_variables_assigned():
+                break
+            else:
+                # branching
+                bt_var = self.pick_branching_variable()
+                logger.debug('--------decision level: %s ---------', self.level)
+                self.assigns[bt_var] = TRUE
+                self.branching_vars.add(bt_var)
+                self.branching_history[self.level] = bt_var
+                self.propagate_history[self.level] = deque()
+                self.update_graph(bt_var)
+                logger.debug('picking %s to be TRUE', bt_var)
+                logger.debug('branching variables: %s', self.branching_history)
+
+            logger.debug('propagate variables: %s', self.propagate_history)
+            logger.debug('learnts: \n%s', pprint.pformat(self.learnts))
         return True
 
     @staticmethod
@@ -146,12 +161,15 @@ class Solver:
                  values.count(UNASSIGN) == 1)
         logger.finest('%s: %s', clause, (check, unassigned))
         logger.finest('assignments: %s', self.assigns)
-        return check, unassigned, clause
+        return check, unassigned
 
-    def update_graph(self, var, val, clause=None, level=-1):
+    def assign(self, literal):
+        """ Assign the variable so that literal is TRUE """
+
+    def update_graph(self, var, clause=None):
         node = self.nodes[var]
-        node.value = val
-        node.level = level
+        node.value = self.assigns[var]
+        node.level = self.level
 
         # update parents
         if clause:  # clause is None, meaning this is branching, no parents to update
@@ -161,40 +179,41 @@ class Solver:
             node.clause = clause
             logger.fine('node %s has parents: %s', var, node.parents)
 
-    def unit_propagate(self, var=None, level=0):
+    def unit_propagate(self):
         """
         A unit clause has all of its literals but 1 assigned to 0. Then, the sole
         unassigned literal must be assigned to value 1. Unit propagation is the
         process of iteratively applying the unit clause rule.
         :return: None if no conflict is detected, else return the literal
         """
-        # check for unsatisfied clauses
-        if var:
-            unsats = list(filter(lambda c: self.compute_clause(c) == 0, self.cnf))
-            if unsats:
-                logger.debug('unsatisfied clause detected: %s when %s is assigned %s',
-                             unsats[0], var, self.assigns[var])
-                return var, unsats[0]
+        while True:
+            propagate_queue = deque()
+            for clause in [x for x in self.cnf.union(self.learnts)]:
+                c_val = self.compute_clause(clause)
+                if c_val == TRUE:
+                    continue
+                if c_val == FALSE:
+                    return clause
+                else:
+                    is_unit, unit_lit = self.is_unit_clause(clause)
+                    if not is_unit:
+                        continue
+                    prop_pair = (unit_lit, clause)
+                    if prop_pair not in propagate_queue:
+                        propagate_queue.append(prop_pair)
+            if not propagate_queue:
+                return None
+            logger.fine('propagate_queue: %s', propagate_queue)
 
-        # check for unit clauses to implicate new assignments
-        unit_clauses = self.get_unit_clauses()
-
-        for _, lit, clause in unit_clauses:
-            var = abs(lit)
-            value = TRUE if lit > 0 else FALSE
-            self.update_graph(var, value, clause, level)
-            if self.assigns[var] ^ value == 1:  # one of the values is 1, another is 0
-                logger.fine('parents of %s: %s', var, self.nodes[var].parents)
-                logger.debug('conflict detected for %s', lit)
-                return lit
-            self.assigns[var] = value
-            logger.debug('propagated %s to be %s, because %s', var, value, self.nodes[var].clause)
-            conf_var, conf_cls = self.unit_propagate(var, level)
-            if conf_var:
-                return conf_var, conf_cls
-            logger.finer('assignments: %s', self.assigns)
-
-        return None, None
+            for prop_lit, clause in propagate_queue:
+                prop_var = abs(prop_lit)
+                self.assigns[prop_var] = TRUE if prop_lit > 0 else FALSE
+                logger.fine('propagated %s to be %s', prop_var, self.assigns[prop_var])
+                self.update_graph(prop_var, clause=clause)
+                try:
+                    self.propagate_history[self.level].append(prop_lit)
+                except KeyError:
+                    pass  # propagated at level 0
 
     def get_unit_clauses(self):
         return list(filter(lambda x: x[0], map(self.is_unit_clause, self.cnf)))
@@ -204,61 +223,82 @@ class Solver:
         none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
         return all_assigned and none_unassigned
 
-    def pick_branching_variable(self, level, bt_var=None, bt_val=None):
+    # def pick_branching_variable(self, bt_var=None, bt_val=None):
+    def pick_branching_variable(self):
         """
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
-        if bt_var is not None and bt_val is not None:
-            var = bt_var
-            val = bt_val
-        else:
-            var = next(filter(
-                lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
-                self.vars))
-            val = TRUE
-        self.branching_vars.add(var)
-        self.update_graph(var, val, level=level)
-        return var, val
+        self.level += 1
+        var = next(filter(
+            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
+            self.vars))
+        return var
 
-    def conflict_analyze(self, conf_var, conf_cls, curr_level):
+    def conflict_analyze(self, conf_cls):
         """
         Analyze the most recent conflict and learn a new clause from the conflict.
         - Find the cut in the implication graph that led to the conflict
         - Derive a new clause which is the negation of the assignments that led to the conflict
 
         Returns a decision level to be backtracked to.
-        :param conf_var: (int) the variable that has conflicts
         :param conf_cls: (set of int) the clause that introduces the conflict
-        :param curr_level: (int) current decision level
-        :return: decision level int
+        :return: ({int} level to backtrack to, {set(int)} clause learnt)
         """
+        def next_recent_assigned(clause):
+            """
+            According to the assign history, separate the latest assigned variable
+            with the rest in `clause`
+            :param clause: {set of int} the clause to separate
+            :return: ({int} variable, [int] other variables in clause)
+            """
+            for v in reversed(assign_history):
+                if v in clause or -v in clause:
+                    return v, [x for x in clause if abs(x) != abs(v)]
+
         logger.fine('conflict clause: %s', conf_cls)
-        logger.fine('existing clause: %s', self.nodes[conf_var].clause)
 
-        learnt = conf_cls.union(self.nodes[conf_var].clause)
-        learnt = frozenset([x for x in learnt if abs(x) != abs(conf_var)])
-        self.cnf.add(learnt)
-        logger.debug('learnt: %s', learnt)
-        parents_conflict = set()
-        for literal in conf_cls:
-            if abs(literal) == abs(conf_var):
-                continue
-            parents_conflict.add(abs(literal))
-            parents_conflict.update(
-                [x.variable for x in self.nodes[abs(literal)].all_parents()
-                 if x.variable in self.branching_vars and x.level != curr_level])
-        parents_existing = set()
-        parents_existing.update(
-            [x.variable for x in self.nodes[abs(conf_var)].all_parents()
-             if x.variable in self.branching_vars and x.level != curr_level])
-        disjunction = parents_existing.intersection(parents_conflict)
+        assign_history = [self.branching_history[self.level]] + list(self.propagate_history[self.level])
+        logger.fine('assign history for level %s: %s', self.level, assign_history)
 
-        if disjunction:
-            level = self.nodes[max(disjunction)].level
+        pool_lits = conf_cls
+        done_lits = set()
+        curr_level_lits = set()
+        prev_level_lits = set()
+
+        while True:
+            logger.fine('-------')
+            logger.fine('pool lits: %s', pool_lits)
+            for lit in pool_lits:
+                if self.nodes[abs(lit)].level == self.level:
+                    curr_level_lits.add(lit)
+                else:
+                    prev_level_lits.add(lit)
+
+            logger.fine('curr level lits: %s', curr_level_lits)
+            logger.fine('prev level lits: %s', prev_level_lits)
+            if len(curr_level_lits) == 1:
+                break
+
+            last_assigned, others = next_recent_assigned(curr_level_lits)
+            logger.fine('last assigned: %s, others: %s', last_assigned, others)
+
+            done_lits.add(abs(last_assigned))
+            curr_level_lits = set(others)
+
+            pool_clause = self.nodes[abs(last_assigned)].clause
+            pool_lits = [l for l in pool_clause
+                         if abs(l) not in done_lits] if pool_clause is not None else []
+
+            logger.fine('done lits: %s', done_lits)
+
+        learnt = frozenset([l for l in curr_level_lits.union(prev_level_lits)])
+        if prev_level_lits:
+            level = max([self.nodes[abs(x)].level for x in prev_level_lits])
         else:
-            level = curr_level - 1
-        return level
+            level = self.level - 1
+
+        return level, learnt
 
     def backtrack(self, level):
         """
@@ -266,16 +306,10 @@ class Solver:
         where the first-assigned variable involved in the conflict was assigned
         """
         logger.debug('backtracking to %s', level)
-        bt_var = None
-        bt_val = None
         for var, node in self.nodes.items():
-            if node.level < level:
-                node.children[:] = [child for child in node.children if child.level < level]
+            if node.level <= level:
+                node.children[:] = [child for child in node.children if child.level <= level]
             else:
-                if node.level == level and node.variable in self.branching_vars:
-                    # reset level to branching decision, remembers branching variable
-                    bt_var = node.variable
-                    bt_val = node.value ^ TRUE
                 node.value = UNASSIGN
                 node.level = -1
                 node.parents = []
@@ -289,9 +323,14 @@ class Solver:
                 and len(self.nodes[var].parents) == 0)
         ])
 
-        logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
+        levels = list(self.propagate_history.keys())
+        for k in levels:
+            if k <= level:
+                continue
+            del self.branching_history[k]
+            del self.propagate_history[k]
 
-        return bt_var, bt_val
+        logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
 
 
 class ImplicationNode:
@@ -319,8 +358,8 @@ class ImplicationNode:
 
     def __str__(self):
         sign = '+' if self.value == TRUE else '-' if self.value == FALSE else '?'
-        return "[{}{}:L{}, {}p, {}c]".format(
-            sign, self.variable, self.level, len(self.parents), len(self.children))
+        return "[{}{}:L{}, {}p, {}c, {}]".format(
+            sign, self.variable, self.level, len(self.parents), len(self.children), self.clause)
 
     def __repr__(self):
         return str(self)
