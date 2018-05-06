@@ -48,7 +48,7 @@ class Solver:
                 lvl, learnt = self.conflict_analyze(conf_cls)
                 logger.debug('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
-                if lvl == 0:
+                if lvl < 0:
                     return False
                 self.learnts.add(learnt)
                 self.backtrack(lvl)
@@ -157,8 +157,10 @@ class Solver:
             values.append(value)
             unassigned = literal if value == UNASSIGN else unassigned
 
-        check = (values.count(FALSE) == len(clause) - 1 and
-                 values.count(UNASSIGN) == 1)
+        check = ((values.count(FALSE) == len(clause) - 1 and
+                  values.count(UNASSIGN) == 1) or
+                 (len(clause) == 1
+                  and values.count(UNASSIGN) == 1))
         logger.finest('%s: %s', clause, (check, unassigned))
         logger.finest('assignments: %s', self.assigns)
         return check, unassigned
@@ -255,6 +257,9 @@ class Solver:
             for v in reversed(assign_history):
                 if v in clause or -v in clause:
                     return v, [x for x in clause if abs(x) != abs(v)]
+
+        if self.level == 0:
+            return -1, None
 
         logger.fine('conflict clause: %s', conf_cls)
 
