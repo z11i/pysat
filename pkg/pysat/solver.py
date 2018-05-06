@@ -2,7 +2,6 @@
 SAT solver using CDCL
 """
 import os
-import pprint
 import time
 from collections import deque
 from pkg.utils.constants import TRUE, FALSE, UNASSIGN
@@ -61,9 +60,9 @@ class Solver:
             conf_cls = self.unit_propagate()
             if conf_cls is not None:
                 # there is conflict in unit propagation
-                logger.fine('implication nodes: \n%s', pprint.pformat(self.nodes))
+                logger.fine('implication nodes: \n%s', self.nodes)
                 lvl, learnt = self.conflict_analyze(conf_cls)
-                logger.debug('level reset to %s', lvl)
+                logger.info('level reset to %s', lvl)
                 logger.debug('learnt: %s', learnt)
                 if lvl < 0:
                     return False
@@ -76,17 +75,17 @@ class Solver:
                 # branching
                 self.level += 1
                 bt_var = self.pick_branching_variable()
-                logger.debug('--------decision level: %s ---------', self.level)
+                logger.info('--------decision level: %s ---------', self.level)
                 self.assigns[bt_var] = TRUE
                 self.branching_vars.add(bt_var)
                 self.branching_history[self.level] = bt_var
                 self.propagate_history[self.level] = deque()
                 self.update_graph(bt_var)
-                logger.debug('picking %s to be TRUE', bt_var)
+                logger.info('picking %s to be TRUE', bt_var)
                 logger.debug('branching variables: %s', self.branching_history)
 
             logger.debug('propagate variables: %s', self.propagate_history)
-            logger.debug('learnts: \n%s', pprint.pformat(self.learnts))
+            logger.debug('learnts: \n%s', self.learnts)
         return True
 
     def preprocess(self):
@@ -359,7 +358,7 @@ class Solver:
             del self.branching_history[k]
             del self.propagate_history[k]
 
-        logger.finer('after backtracking, graph:\n%s', pprint.pformat(self.nodes))
+        logger.finer('after backtracking, graph:\n%s', self.nodes)
 
 
 class ImplicationNode:
