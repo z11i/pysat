@@ -24,6 +24,7 @@ class Solver:
         self.branching_vars = set()
         self.branching_history = {}  # level -> branched variable
         self.propagate_history = {}  # level -> propagate variables list
+        self.branching_count = 0
 
     def run(self):
         start_time = time.time()
@@ -41,14 +42,15 @@ class Solver:
             'c ====================',
             's {}',
             'v {}',
-            'c Done (time: {:.2f})'
+            'c Done (time: {:.2f} s, picked: {} times)'
         ])
         values = ' '.join(['{}{}'.format('' if v == 1 else '-', k)
                            for k, v in self.assigns.items()])
         return answer.format(self.filename,
                              'SATISFIABLE' if sat else 'UNSATISFIABLE',
                              values if sat else '',
-                             time)
+                             time,
+                             self.branching_count)
 
     def solve(self):
         """
@@ -74,6 +76,7 @@ class Solver:
             else:
                 # branching
                 self.level += 1
+                self.branching_count += 1
                 bt_var, bt_val = self.pick_branching_variable()
                 logger.info('--------decision level: %s ---------', self.level)
                 self.assigns[bt_var] = bt_val

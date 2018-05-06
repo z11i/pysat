@@ -5,6 +5,10 @@ from pkg.pysat.solver import Solver
 from pkg.utils.constants import UNASSIGN, TRUE, FALSE
 
 
+class OrderedChoiceSolver(Solver):
+    pass
+
+
 class RandomChoiceSolver(Solver):
     def pick_branching_variable(self):
         """
@@ -55,9 +59,7 @@ class DynamicLargestIndividualSumSolver(Solver):
                 except KeyError:
                     pass
 
-        print(v_pos)
         pos_count = max(v_pos.items(), key=operator.itemgetter(1))
-        print(v_neg)
         neg_count = max(v_neg.items(), key=operator.itemgetter(1))
         if pos_count[1] > neg_count[1]:
             return pos_count[0], TRUE

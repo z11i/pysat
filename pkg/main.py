@@ -22,9 +22,11 @@ if __name__ == '__main__':
         'heuristics',
         type=str,
         nargs='?',
-        default='RandomChoiceSolver',
-        help='choose heuristics to branch variable: RandomChoiceSolver (default) '
-             '| FrequentVarsFirstSolver'
+        default='FrequentVarsFirstSolver',
+        help='choose heuristics to branch variable'
+             ': OrderedChoiceSolver '
+             '| RandomChoiceSolver '
+             '| FrequentVarsFirstSolver (default) '
              '| DynamicLargestIndividualSumSolver')
     parser.add_argument(
         '--loglevel',

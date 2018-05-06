@@ -4,15 +4,16 @@ from pkg.pysat import solver, branch_heuristics as solvers
 solver.logger.setLevel('WARNING')
 
 
-def test(solver_name):
+def test(test_suite, solver_name):
     expected_count = 0
     actual_sat_count = 0
     actual_unsat_count = 0
 
     time = 0
+    branches = 0
     count = -1  # -1: maximum number of tests; n for first n tests
 
-    directory = os.path.abspath('uf20-91')
+    directory = os.path.abspath(test_suite)
     dirs = os.listdir(directory)
     try:
         dirs[:] = dirs[:count]
@@ -22,6 +23,7 @@ def test(solver_name):
         filename = os.path.abspath(os.path.join(directory, file))
         solv = getattr(solvers, solver_name)(filename)
         is_sat, t, answer = solv.run()
+        branches += solv.branching_count
         time += t
         if is_sat:
             actual_sat_count += 1
@@ -29,11 +31,17 @@ def test(solver_name):
             actual_unsat_count += 1
         expected_count += 1
 
-    print(f'{solver_name}\t Average time used: {time / expected_count:.3f} s')
+    print(solver_name)
+    print('\tAverage time used: {:.3f} s'.format(time / expected_count))
+    print('\tAverage branch picked: {:.1f}'.format(branches / expected_count))
 
 
-print('Starting benchmarking...')
-test('Solver')
-test('FrequentVarsFirstSolver')
-test('RandomChoiceSolver')
-test('DynamicLargestIndividualSumSolver')
+def test_suite(suite):
+    print('Starting benchmarking...')
+    test(suite, 'OrderedChoiceSolver')
+    test(suite, 'RandomChoiceSolver')
+    test(suite, 'FrequentVarsFirstSolver')
+    test(suite, 'DynamicLargestIndividualSumSolver')
+
+
+test_suite('uf20-91')
