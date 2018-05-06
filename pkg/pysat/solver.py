@@ -74,14 +74,14 @@ class Solver:
             else:
                 # branching
                 self.level += 1
-                bt_var = self.pick_branching_variable()
+                bt_var, bt_val = self.pick_branching_variable()
                 logger.info('--------decision level: %s ---------', self.level)
-                self.assigns[bt_var] = TRUE
+                self.assigns[bt_var] = bt_val
                 self.branching_vars.add(bt_var)
                 self.branching_history[self.level] = bt_var
                 self.propagate_history[self.level] = deque()
                 self.update_graph(bt_var)
-                logger.info('picking %s to be TRUE', bt_var)
+                logger.info('picking %s to be %s', bt_var, 'TRUE' if bt_val == TRUE else 'FALSE')
                 logger.debug('branching variables: %s', self.branching_history)
 
             logger.debug('propagate variables: %s', self.propagate_history)
@@ -258,7 +258,7 @@ class Solver:
         :return: variable, value assigned
         """
         var = next(self.all_unassigned_vars())
-        return var
+        return var, TRUE
 
     def conflict_analyze(self, conf_cls):
         """
