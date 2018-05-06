@@ -13,7 +13,10 @@ def test(test_suite, solver_name):
     branches = 0
     count = -1  # -1: maximum number of tests; n for first n tests
 
-    directory = os.path.abspath(test_suite)
+    if os.path.abspath('.').endswith('test'):
+        directory = os.path.abspath(test_suite)
+    else:
+        directory = os.path.abspath(os.path.join('test', test_suite))
     dirs = os.listdir(directory)
     try:
         dirs[:] = dirs[:count]
@@ -37,7 +40,8 @@ def test(test_suite, solver_name):
 
 
 def test_suite(suite):
-    print('Starting benchmarking...')
+    print('------------------------')
+    print('Starting benchmarking with {} ...'.format(suite))
     test(suite, 'OrderedChoiceSolver')
     test(suite, 'RandomChoiceSolver')
     test(suite, 'FrequentVarsFirstSolver')
@@ -45,3 +49,6 @@ def test_suite(suite):
 
 
 test_suite('uf20-91')
+test_suite('uf50-218')
+test_suite('uf75-325')
+test_suite('uf100-430')
