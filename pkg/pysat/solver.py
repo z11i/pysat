@@ -1,6 +1,7 @@
 """
 SAT solver using CDCL
 """
+import os
 import pprint
 import time
 from collections import deque
@@ -29,9 +30,26 @@ class Solver:
         start_time = time.time()
         sat = self.solve()
         spent = time.time() - start_time
+        answer = self.output_answer(sat, spent)
         logger.info('Equation is {}, resolved in {:.2f} s'
                     .format('SAT' if sat else 'UNSAT', spent))
-        return sat, spent
+        return sat, spent, answer
+
+    def output_answer(self, sat, time):
+        answer = os.linesep.join([
+            'c ====================',
+            'c pysat reading from {}',
+            'c ====================',
+            's {}',
+            'v {}',
+            'c Done (time: {:.2f})'
+        ])
+        values = ' '.join(['{}{}'.format('' if v == 1 else '-', k)
+                           for k, v in self.assigns.items()])
+        return answer.format(self.filename,
+                             'SATISFIABLE' if sat else 'UNSATISFIABLE',
+                             values if sat else '',
+                             time)
 
     def solve(self):
         """

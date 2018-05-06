@@ -18,7 +18,7 @@ if __name__ == '__main__':
         help='path of .cnf file')
     parser.add_argument(
         '--loglevel',
-        default='INFO',
+        default='WARNING',
         nargs='?',
         help='level of logging (WARNING, DEBUG, etc.)')
 
@@ -30,4 +30,5 @@ if __name__ == '__main__':
 
     solver.logger.setLevel(args.loglevel)
     solver = solver.Solver(filename=args.filename)
-    sat, time = solver.run()
+    _, _, answer = solver.run()
+    print(answer)

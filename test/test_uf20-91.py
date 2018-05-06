@@ -1,19 +1,21 @@
 import os
 from pkg.pysat import solver
-solver.logger.setLevel('INFO')
+solver.logger.setLevel('WARNING')
 
 expected_count = 0
 actual_sat_count = 0
 actual_unsat_count = 0
 
 time = 0
+count = 50
 
 directory = os.path.abspath('uf20-91')
-dirs = sorted(os.listdir(directory))
+dirs = os.listdir(directory)[:count]
 for file in dirs:
     filename = os.path.abspath(os.path.join(directory, file))
     solv = solver.Solver(filename)
-    is_sat, t = solv.run()
+    is_sat, t, answer = solv.run()
+    print(answer)
     time += t
     if is_sat:
         actual_sat_count += 1
