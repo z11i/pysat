@@ -56,8 +56,7 @@ class Solver:
         Returns TRUE if SAT, False if UNSAT
         :return: whether there is a solution
         """
-        # if self.unit_propagate():
-        #     return False
+        self.preprocess()
         while not self.are_all_variables_assigned():
             conf_cls = self.unit_propagate()
             if conf_cls is not None:
@@ -75,6 +74,7 @@ class Solver:
                 break
             else:
                 # branching
+                self.level += 1
                 bt_var = self.pick_branching_variable()
                 logger.debug('--------decision level: %s ---------', self.level)
                 self.assigns[bt_var] = TRUE
@@ -88,6 +88,10 @@ class Solver:
             logger.debug('propagate variables: %s', self.propagate_history)
             logger.debug('learnts: \n%s', pprint.pformat(self.learnts))
         return True
+
+    def preprocess(self):
+        """ Injects before solving """
+        pass
 
     @staticmethod
     def read_file(filename):
@@ -243,16 +247,18 @@ class Solver:
         none_unassigned = not any(var for var in self.vars if self.assigns[var] == UNASSIGN)
         return all_assigned and none_unassigned
 
+    def all_unassigned_vars(self):
+        return filter(
+            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
+            self.vars)
+
     # def pick_branching_variable(self, bt_var=None, bt_val=None):
     def pick_branching_variable(self):
         """
         Pick a variable to assign a value.
         :return: variable, value assigned
         """
-        self.level += 1
-        var = next(filter(
-            lambda v: v in self.assigns and self.assigns[v] == UNASSIGN,
-            self.vars))
+        var = next(self.all_unassigned_vars())
         return var
 
     def conflict_analyze(self, conf_cls):

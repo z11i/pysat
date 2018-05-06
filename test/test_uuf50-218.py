@@ -7,10 +7,14 @@ actual_sat_count = 0
 actual_unsat_count = 0
 
 time = 0
-count = 50
+count = -1  # -1: maximum number of tests; n for first n tests
 
 directory = os.path.abspath('uuf50-218')
-dirs = os.listdir(directory)[:count]
+dirs = os.listdir(directory)
+try:
+    dirs[:] = dirs[:count]
+except IndexError:
+    pass
 for file in dirs:
     filename = os.path.abspath(os.path.join(directory, file))
     solv = solver.Solver(filename)
