@@ -318,8 +318,9 @@ class Solver:
             curr_level_lits = set(others)
 
             pool_clause = self.nodes[abs(last_assigned)].clause
-            pool_lits = [l for l in pool_clause
-                         if abs(l) not in done_lits] if pool_clause is not None else []
+            pool_lits = [
+                l for l in pool_clause if abs(l) not in done_lits
+            ] if pool_clause is not None else []
 
             logger.fine('done lits: %s', done_lits)
 
