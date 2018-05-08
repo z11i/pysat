@@ -4,14 +4,13 @@ from pkg.pysat import solver, branch_heuristics as solvers
 solver.logger.setLevel('WARNING')
 
 
-def test(test_suite, solver_name):
+def test(test_suite, solver_name, count):
     expected_count = 0
     actual_sat_count = 0
     actual_unsat_count = 0
 
     time = 0
     branches = 0
-    count = -1  # -1: maximum number of tests; n for first n tests
 
     if os.path.abspath('.').endswith('test'):
         directory = os.path.abspath(test_suite)
@@ -23,6 +22,7 @@ def test(test_suite, solver_name):
     except IndexError:
         pass
     for file in dirs:
+        print(expected_count)
         filename = os.path.abspath(os.path.join(directory, file))
         solv = getattr(solvers, solver_name)(filename)
         is_sat, t, answer = solv.run()
@@ -39,16 +39,16 @@ def test(test_suite, solver_name):
     print('\tAverage branch picked: {:.1f}'.format(branches / expected_count))
 
 
-def test_suite(suite):
+def test_suite(suite, count):
     print('------------------------')
     print('Starting benchmarking with {} ...'.format(suite))
-    test(suite, 'OrderedChoiceSolver')
-    test(suite, 'RandomChoiceSolver')
-    test(suite, 'FrequentVarsFirstSolver')
-    test(suite, 'DynamicLargestIndividualSumSolver')
+    test(suite, 'OrderedChoiceSolver', count)
+    test(suite, 'RandomChoiceSolver', count)
+    test(suite, 'FrequentVarsFirstSolver', count)
+    test(suite, 'DynamicLargestIndividualSumSolver', count)
 
 
-test_suite('uf20-91')
-test_suite('uf50-218')
-test_suite('uf75-325')
-test_suite('uf100-430')
+test_suite('uf20-91', -1)
+test_suite('uf50-218', 50)
+test_suite('uf75-325', 10)
+test_suite('uf150-645', 3)
