@@ -4,6 +4,25 @@
 
 **Student number**: ***REMOVED***
 
+## Program
+
+Use Python 3 to run the solver.
+
+```
+python3 -m pkg.main <file_name> <solver_to_use>
+```
+
+where `<file_name>` is the DIMACS CNF file, and `<solver_to_use>` is the branching heuristics. There are 4 heuristics used in this project, which are explained in the next section. To use any of the heuristics, run one of the following:
+
+```
+python3 -m pkg.main <file_name> OrderedChoiceSolver
+python3 -m pkg.main <file_name> RandomChoiceSolver
+python3 -m pkg.main <file_name> FrequentVarsFirstSolver
+python3 -m pkg.main <file_name> DynamicLargestIndividualSumSolver
+```
+
+If heuristics not specified, `FrequentVarsFirstSolver` is the default.
+
 ## CDCL Findings
 
 ### Pick Branching Variable
@@ -12,13 +31,20 @@
 
 There are four heuristics implemented currently with my CDCL program, namely:
 
-- _Ordered choice_
+- _Ordered choice_ (OrderedChoiceSolver)
+
   Choose propositions with ascending order, _i.e._, 1, 2, 3, ...
-- _Random choice_
+
+- _Random choice_ (RandomChoiceSolver)
+
   Choose propositions randomly
-- _3-clause heuristic_
+
+- _3-clause heuristic_ (FrequentVarsFirstSolver)
+
   Modified from _2-clause heuristic_, which we choose propositions with maximum occurrences in 3-clauses, and break ties randomly
-- _Dynamic largest individual sum_
+
+- _Dynamic largest individual sum_ (DynamicLargestIndividualSumSolver)
+
   (Explained later)
 
 #### Dynamic Largest Individual Sum
