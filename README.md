@@ -1,9 +1,3 @@
-# ***REMOVED***
-
-**Name**: ***REMOVED***
-
-**Student number**: ***REMOVED***
-
 ## Program
 
 Use Python 3 to run the solver.
